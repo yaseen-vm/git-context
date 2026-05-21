@@ -1,0 +1,37 @@
+{
+  "name": "git-context",
+  "version": "0.1.0",
+  "description": "CLI tool that gathers and structures repository context for AI-powered code reviews",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "git-context": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "git",
+    "ai",
+    "code-review",
+    "cli",
+    "context"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
