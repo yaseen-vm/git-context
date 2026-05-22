@@ -25,7 +25,9 @@ export {
   getRelativePath,
   isSecretFile,
   isGeneratedFile,
+  isVendorFile,
   isLockFile,
+  isBinaryFile,
   shouldExcludeFile,
   truncateContent,
   formatTokenCount,
@@ -33,7 +35,9 @@ export {
   REVIEW_FOCUSES,
   SECRET_PATTERNS,
   GENERATED_PATTERNS,
+  VENDOR_PATTERNS,
   LOCK_FILE_PATTERNS,
+  BINARY_EXTENSIONS,
 } from './utils/index.js';
 export type {
   FileChange,
@@ -46,7 +50,7 @@ export type {
 } from './utils/index.js';
 
 export { PromptBuilder } from './prompt-builder/index.js';
-export type { PromptBuilderOptions, PromptResult } from './prompt-builder/index.js';
+export type { PromptBuilderOptions, PromptResult, PromptTemplate } from './prompt-builder/index.js';
 
 export { SecretFilter } from './secret-filter/index.js';
 export type { SecretFilterOptions, FilterResult } from './secret-filter/index.js';
