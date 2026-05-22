@@ -1,6 +1,5 @@
-import fs from 'fs';
 import path from 'path';
-import { findConfigFile } from '../utils/index.js';
+import { findConfigFile, readJsonFile } from '../utils/index.js';
 import type { TypeScriptConfig } from './types.js';
 
 const TSCONFIG_FILES = ['tsconfig.json', 'jsconfig.json'];
@@ -13,13 +12,14 @@ export function parseTypeScriptConfig(repoPath: string): TypeScriptConfig | null
   }
 
   const filePath = path.join(repoPath, configFile);
-  const content = fs.readFileSync(filePath, 'utf-8');
-
   let config: Record<string, unknown>;
 
   try {
-    config = JSON.parse(content);
-  } catch {
+    config = readJsonFile(filePath) as Record<string, unknown>;
+  } catch (error) {
+    console.warn(
+      `Warning: Failed to parse ${configFile}: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return createDefaultTypeScriptConfig(configFile);
   }
 
