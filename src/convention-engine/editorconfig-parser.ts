@@ -25,7 +25,7 @@ export function parseEditorConfig(repoPath: string): EditorConfig | null {
 function parseEditorConfigContent(content: string): EditorConfig {
   const lines = content.split('\n');
   let root = false;
-  let globalRules: EditorConfigRule = { ...DEFAULT_RULE };
+  const globalRules: EditorConfigRule = { ...DEFAULT_RULE };
   const sections: EditorConfigSection[] = [];
   let currentSection: { pattern: string; rules: EditorConfigRule } | null = null;
 
@@ -88,12 +88,13 @@ function applyRule(rule: EditorConfigRule, key: string, value: string): void {
       }
       break;
 
-    case 'indent_size':
+    case 'indent_size': {
       const size = parseInt(value, 10);
       if (!isNaN(size)) {
         rule.indentSize = size;
       }
       break;
+    }
 
     case 'charset':
       rule.charset = value;

@@ -44,7 +44,6 @@ const E2E_CONFIG_FILES = [
 export function parseTestFrameworkConfig(repoPath: string): TestFrameworkConfig | null {
   const configFiles: string[] = [];
   let framework: string | null = null;
-  let configFile: string | null = null;
   let hasCoverage = false;
   let coverageProvider: string | null = null;
   let testPattern: string | null = null;
@@ -138,7 +137,7 @@ export function parseTestFrameworkConfig(repoPath: string): TestFrameworkConfig 
     };
   }
 
-  configFile = configFiles[0];
+  const configFile = configFiles[0];
 
   if (configFiles.some((f) => f.startsWith('jest.config'))) {
     framework = 'Jest';

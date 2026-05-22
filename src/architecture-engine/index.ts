@@ -9,25 +9,14 @@ import {
   generateDirectoryTree,
 } from './summarizer.js';
 import type {
-  FileInfo,
-  DirectoryInfo,
   ModuleBoundary,
   EntryPoint,
   FolderStructure,
   ArchitectureAnalysisResult,
 } from './types.js';
-import type {
-  DocumentationFile,
-  DocumentationSection,
-  DocumentationAnalysis,
-} from './documentation-parser.js';
-import type { Service, ServiceRelationship, ServiceMap } from './service-mapper.js';
-import type {
-  FrameworkDetection,
-  ArchitecturePattern,
-  StateManagementPattern,
-  PatternDetectionResult,
-} from './pattern-detector.js';
+import type { DocumentationAnalysis } from './documentation-parser.js';
+import type { ServiceMap } from './service-mapper.js';
+import type { PatternDetectionResult } from './pattern-detector.js';
 
 export class ArchitectureEngine {
   private repoPath: string;

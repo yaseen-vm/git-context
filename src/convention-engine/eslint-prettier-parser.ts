@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { ESLintConfig, PrettierConfig, LintFormatConfig } from './types.js';
+import type { ESLintConfig, PrettierConfig } from './types.js';
 
 const ESLINT_CONFIG_FILES = [
   '.eslintrc.js',
@@ -71,9 +71,6 @@ export function parseESLintConfig(repoPath: string): ESLintConfig | null {
 function parseESLintYaml(configFile: string, content: string): ESLintConfig {
   const extendsList: string[] = [];
   const plugins: string[] = [];
-  let hasTypeScriptSupport = false;
-  let hasReactSupport = false;
-  let hasPrettierIntegration = false;
 
   const extendsMatch = content.match(/extends:\s*\[([^\]]+)\]/);
   if (extendsMatch) {
@@ -87,12 +84,12 @@ function parseESLintYaml(configFile: string, content: string): ESLintConfig {
     plugins.push(...items);
   }
 
-  hasTypeScriptSupport =
+  const hasTypeScriptSupport =
     extendsList.some((e) => e.includes('typescript')) ||
     plugins.some((p) => p.includes('typescript'));
-  hasReactSupport =
+  const hasReactSupport =
     extendsList.some((e) => e.includes('react')) || plugins.some((p) => p.includes('react'));
-  hasPrettierIntegration =
+  const hasPrettierIntegration =
     extendsList.some((e) => e.includes('prettier')) || plugins.some((p) => p.includes('prettier'));
 
   return {
