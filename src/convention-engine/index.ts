@@ -53,63 +53,20 @@ export class ConventionEngine {
     const packageJsonConfig = this.getPackageJsonConfig();
     const ciConfig = this.getCIConfig();
     const testFrameworkConfig = this.getTestFrameworkConfig();
-    const summaries: ConventionSummary[] = [];
 
-    const editorConfigConventions = summarizeEditorConfig(editorConfig);
-    summaries.push({
-      source: '.editorconfig',
-      category: 'formatting',
-      conventions: editorConfigConventions,
-    });
-
-    const eslintConventions = summarizeESLintConfig(eslintConfig);
-    summaries.push({
-      source: 'ESLint',
-      category: 'lint',
-      conventions: eslintConventions,
-    });
-
-    const prettierConventions = summarizePrettierConfig(prettierConfig);
-    summaries.push({
-      source: 'Prettier',
-      category: 'formatting',
-      conventions: prettierConventions,
-    });
-
-    const typeScriptConventions = summarizeTypeScriptConfig(typeScriptConfig);
-    summaries.push({
-      source: 'TypeScript',
-      category: 'typescript',
-      conventions: typeScriptConventions,
-    });
-
-    const packageJsonConventions = summarizePackageJsonConfig(packageJsonConfig);
-    summaries.push({
-      source: 'package.json',
-      category: 'package',
-      conventions: packageJsonConventions,
-    });
-
-    const ciConventions = summarizeCIConfig(ciConfig);
-    summaries.push({
-      source: 'CI',
-      category: 'ci',
-      conventions: ciConventions,
-    });
-
-    const testFrameworkConventions = summarizeTestFrameworkConfig(testFrameworkConfig);
-    summaries.push({
-      source: 'Test Framework',
-      category: 'test',
-      conventions: testFrameworkConventions,
-    });
+    const summaries: ConventionSummary[] = [
+      { source: '.editorconfig', category: 'formatting', conventions: summarizeEditorConfig(editorConfig) },
+      { source: 'ESLint', category: 'lint', conventions: summarizeESLintConfig(eslintConfig) },
+      { source: 'Prettier', category: 'formatting', conventions: summarizePrettierConfig(prettierConfig) },
+      { source: 'TypeScript', category: 'typescript', conventions: summarizeTypeScriptConfig(typeScriptConfig) },
+      { source: 'package.json', category: 'package', conventions: summarizePackageJsonConfig(packageJsonConfig) },
+      { source: 'CI', category: 'ci', conventions: summarizeCIConfig(ciConfig) },
+      { source: 'Test Framework', category: 'test', conventions: summarizeTestFrameworkConfig(testFrameworkConfig) },
+    ];
 
     return {
       editorConfig,
-      lintFormat: {
-        eslint: eslintConfig,
-        prettier: prettierConfig,
-      },
+      lintFormat: { eslint: eslintConfig, prettier: prettierConfig },
       typeScript: typeScriptConfig,
       packageJson: packageJsonConfig,
       ci: ciConfig,
