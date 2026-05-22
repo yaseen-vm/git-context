@@ -17,6 +17,10 @@ import {
   parseTypeScriptConfig,
   summarizeTypeScriptConfig,
 } from '../../src/convention-engine/typescript-config-parser.js';
+import {
+  parsePackageJson,
+  summarizePackageJsonConfig,
+} from '../../src/convention-engine/package-json-parser.js';
 
 describe('ConventionEngine', () => {
   let tmpDir: string;
@@ -712,6 +716,268 @@ export default tseslint.config(
         expect(config).not.toBeNull();
         expect(config!.configFile).toBe('tsconfig.json');
         expect(config!.isStrict).toBe(true);
+      });
+    });
+  });
+
+  describe('Issue #18: package.json parsing', () => {
+    describe('Package.json parsing', () => {
+      it('should return null when no package.json exists', () => {
+        const config = parsePackageJson(tmpDir);
+        expect(config).toBeNull();
+      });
+
+      it('should parse basic package.json properties', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            version: '1.0.0',
+            type: 'module',
+            scripts: {
+              build: 'tsc',
+              test: 'vitest',
+              lint: 'eslint src/',
+            },
+            dependencies: {
+              express: '^4.18.0',
+            },
+            devDependencies: {
+              typescript: '^5.0.0',
+              vitest: '^1.0.0',
+            },
+          }),
+        );
+
+        const config = parsePackageJson(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.name).toBe('my-app');
+        expect(config!.version).toBe('1.0.0');
+        expect(config!.type).toBe('module');
+        expect(config!.scripts.build).toBe('tsc');
+        expect(config!.scripts.test).toBe('vitest');
+        expect(config!.scripts.lint).toBe('eslint src/');
+        expect(config!.dependencies.express).toBe('^4.18.0');
+        expect(config!.devDependencies.typescript).toBe('^5.0.0');
+        expect(config!.hasBuildScript).toBe(true);
+        expect(config!.hasTestScript).toBe(true);
+        expect(config!.hasLintScript).toBe(true);
+      });
+
+      it('should detect framework from dependencies', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            dependencies: {
+              next: '^14.0.0',
+              react: '^18.0.0',
+            },
+          }),
+        );
+
+        const config = parsePackageJson(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.detectedFramework).toBe('Next.js');
+      });
+
+      it('should detect build tool from dependencies', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vite: '^5.0.0',
+            },
+          }),
+        );
+
+        const config = parsePackageJson(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.detectedBuildTool).toBe('Vite');
+      });
+
+      it('should detect test framework from dependencies', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              jest: '^29.0.0',
+            },
+          }),
+        );
+
+        const config = parsePackageJson(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.detectedTestFramework).toBe('Jest');
+      });
+
+      it('should detect Vitest as test framework', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+            },
+          }),
+        );
+
+        const config = parsePackageJson(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.detectedTestFramework).toBe('Vitest');
+      });
+
+      it('should summarize package.json conventions', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            version: '1.0.0',
+            type: 'module',
+            scripts: {
+              build: 'tsc',
+              test: 'vitest',
+              lint: 'eslint src/',
+              format: 'prettier --write src/',
+              typecheck: 'tsc --noEmit',
+            },
+            dependencies: {
+              express: '^4.18.0',
+            },
+            devDependencies: {
+              typescript: '^5.0.0',
+              vitest: '^1.0.0',
+            },
+          }),
+        );
+
+        const config = parsePackageJson(tmpDir);
+        const summary = summarizePackageJsonConfig(config);
+
+        expect(summary).toContain('Package: my-app@1.0.0');
+        expect(summary).toContain('Module type: module');
+        expect(summary).toContain('Test framework: Vitest');
+        expect(summary).toContain('Available scripts: build, test, lint, format, typecheck');
+        expect(summary).toContain('Dependencies: 1 production, 2 development');
+      });
+
+      it('should handle missing package.json in summary', () => {
+        const summary = summarizePackageJsonConfig(null);
+        expect(summary).toContain('No package.json found');
+      });
+
+      it('should handle package.json with no scripts', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-lib',
+            version: '0.1.0',
+          }),
+        );
+
+        const config = parsePackageJson(tmpDir);
+        const summary = summarizePackageJsonConfig(config);
+
+        expect(summary).toContain('Package: my-lib@0.1.0');
+        expect(summary).toContain('Dependencies: 0 production, 0 development');
+      });
+    });
+
+    describe('ConventionEngine package.json integration', () => {
+      it('should include package.json config in analyze result', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            version: '1.0.0',
+            scripts: {
+              build: 'tsc',
+              test: 'vitest',
+            },
+            devDependencies: {
+              vitest: '^1.0.0',
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const result = engine.analyze();
+
+        expect(result.packageJson).not.toBeNull();
+        expect(result.packageJson!.name).toBe('my-app');
+        expect(result.packageJson!.detectedTestFramework).toBe('Vitest');
+
+        const pkgSummary = result.summaries.find((s) => s.source === 'package.json');
+        expect(pkgSummary).toBeDefined();
+        expect(pkgSummary!.category).toBe('package');
+        expect(pkgSummary!.conventions).toContain('Test framework: Vitest');
+      });
+
+      it('should provide getPackageJsonConfig shortcut', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            version: '1.0.0',
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const config = engine.getPackageJsonConfig();
+
+        expect(config).not.toBeNull();
+        expect(config!.name).toBe('my-app');
+        expect(config!.version).toBe('1.0.0');
+      });
+
+      it('should provide getPackageConventions shortcut', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            scripts: {
+              build: 'tsc',
+              test: 'vitest',
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const conventions = engine.getPackageConventions();
+
+        expect(conventions).toContain('Package: my-app@0.0.0');
+        expect(conventions).toContain('Available scripts: build, test');
+      });
+
+      it('should handle no package.json gracefully', () => {
+        const engine = new ConventionEngine(tmpDir);
+        const result = engine.analyze();
+
+        expect(result.packageJson).toBeNull();
+      });
+
+      it('should detect multiple frameworks correctly', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            dependencies: {
+              react: '^18.0.0',
+            },
+            devDependencies: {
+              '@testing-library/react': '^14.0.0',
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const config = engine.getPackageJsonConfig();
+
+        expect(config).not.toBeNull();
+        expect(config!.detectedFramework).toBe('React');
+        expect(config!.detectedTestFramework).toBe('Testing Library (React)');
       });
     });
   });
