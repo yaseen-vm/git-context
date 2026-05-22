@@ -308,10 +308,12 @@ export class DependencyAnalyzer {
   findRelatedFiles(filePath: string, maxHops: number = 2): RelatedFile[] {
     const visited = new Map<string, number>();
     const related: RelatedFile[] = [];
-    const queue: Array<{ file: string; hops: number }> = [{ file: filePath, hops: 0 }];
+    const queue: Array<{ file: string; hops: number; direction: 'import' | 'importer' }> = [
+      { file: filePath, hops: 0, direction: 'import' },
+    ];
 
     while (queue.length > 0) {
-      const { file, hops } = queue.shift()!;
+      const { file, hops, direction } = queue.shift()!;
 
       if (hops > maxHops) continue;
       if (visited.has(file) && visited.get(file)! <= hops) continue;
@@ -321,27 +323,98 @@ export class DependencyAnalyzer {
       if (file !== filePath) {
         related.push({
           path: file,
-          relation: 'import',
+          relation: direction,
           hops,
         });
       }
 
+      // Follow imports (outgoing edges)
       const imports = this.getImportsOf(file);
-      const importers = this.getImportersOf(file);
-
       for (const imp of imports) {
         if (!visited.has(imp)) {
-          queue.push({ file: imp, hops: hops + 1 });
+          queue.push({ file: imp, hops: hops + 1, direction: 'import' });
         }
       }
 
+      // Follow importers (incoming edges)
+      const importers = this.getImportersOf(file);
       for (const importer of importers) {
         if (!visited.has(importer)) {
-          queue.push({ file: importer, hops: hops + 1 });
+          queue.push({ file: importer, hops: hops + 1, direction: 'importer' });
         }
       }
     }
 
     return related;
+  }
+
+  getFilesInGraph(): string[] {
+    return Array.from(this.graph.files.keys());
+  }
+
+  getGraphStats(): {
+    totalFiles: number;
+    totalImports: number;
+    totalImporters: number;
+    filesWithNoImports: number;
+    filesWithNoImporters: number;
+  } {
+    let totalImports = 0;
+    let totalImporters = 0;
+    let filesWithNoImports = 0;
+    let filesWithNoImporters = 0;
+
+    for (const [, imports] of this.graph.imports) {
+      totalImports += imports.size;
+      if (imports.size === 0) filesWithNoImports++;
+    }
+
+    for (const [, importers] of this.graph.importers) {
+      totalImporters += importers.size;
+      if (importers.size === 0) filesWithNoImporters++;
+    }
+
+    return {
+      totalFiles: this.graph.files.size,
+      totalImports,
+      totalImporters,
+      filesWithNoImports,
+      filesWithNoImporters,
+    };
+  }
+
+  findCircularDependencies(): string[][] {
+    const cycles: string[][] = [];
+    const visited = new Set<string>();
+    const recursionStack = new Set<string>();
+
+    const dfs = (file: string, path: string[]): void => {
+      visited.add(file);
+      recursionStack.add(file);
+      path.push(file);
+
+      const imports = this.getImportsOf(file);
+      for (const imp of imports) {
+        if (!visited.has(imp)) {
+          dfs(imp, path);
+        } else if (recursionStack.has(imp)) {
+          const cycleStart = path.indexOf(imp);
+          if (cycleStart !== -1) {
+            cycles.push(path.slice(cycleStart));
+          }
+        }
+      }
+
+      path.pop();
+      recursionStack.delete(file);
+    };
+
+    for (const file of this.graph.files.keys()) {
+      if (!visited.has(file)) {
+        dfs(file, []);
+      }
+    }
+
+    return cycles;
   }
 }
