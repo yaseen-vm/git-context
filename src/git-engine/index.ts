@@ -72,12 +72,45 @@ export class GitEngine {
   }
 
   async getBranchDiff(branch: string, base?: string): Promise<GitDiff> {
-    const baseBranch = base || 'master';
+    const baseBranch = base || (await this.getDefaultBranch());
     const diff = await this.git.diff([`${baseBranch}..${branch}`, '--stat']);
     const diffDetail = await this.git.diff([`${baseBranch}..${branch}`]);
     const files = await this.parseDiff(diffDetail);
     const stats = this.parseDiffStats(diff);
     return { files, stats };
+  }
+
+  async getDefaultBranch(): Promise<string> {
+    try {
+      // Try to get the default branch from origin/HEAD
+      const result = await this.git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD', '--short']);
+      if (result) {
+        return result.trim().replace('origin/', '');
+      }
+    } catch {
+      // Ignore error
+    }
+
+    try {
+      // Try to get the default branch from remote
+      const remotes = await this.git.getRemotes(true);
+      const origin = remotes.find((r) => r.name === 'origin');
+      if (origin?.refs?.fetch) {
+        // Check if main or master branch exists
+        const branches = await this.git.branch(['-r']);
+        if (branches.all.includes('origin/main')) {
+          return 'main';
+        }
+        if (branches.all.includes('origin/master')) {
+          return 'master';
+        }
+      }
+    } catch {
+      // Ignore error
+    }
+
+    // Default to 'main' as it's the modern default
+    return 'main';
   }
 
   async getPRDiff(prNumber: number): Promise<{ prInfo: PRInfo; diff: GitDiff }> {
