@@ -38,6 +38,63 @@ export class GitEngine {
     this.prAnalyzer = new PRAnalyzer();
   }
 
+  private validateSha(sha: string, paramName: string = 'SHA'): void {
+    if (!sha || typeof sha !== 'string') {
+      throw new Error(`${paramName} must be a non-empty string`);
+    }
+    const trimmed = sha.trim();
+    if (!/^[0-9a-f]{4,40}$/i.test(trimmed)) {
+      throw new Error(
+        `${paramName} must be a valid git commit hash (4-40 hex characters), got: "${trimmed}"`,
+      );
+    }
+  }
+
+  private validateBranchName(branch: string, paramName: string = 'branch'): void {
+    if (!branch || typeof branch !== 'string') {
+      throw new Error(`${paramName} must be a non-empty string`);
+    }
+    const trimmed = branch.trim();
+    if (trimmed.length === 0) {
+      throw new Error(`${paramName} must not be empty`);
+    }
+    if (trimmed.includes('..')) {
+      throw new Error(`${paramName} must not contain ".." range syntax`);
+    }
+    if (/[~^:?*\\]/.test(trimmed)) {
+      throw new Error(`${paramName} contains invalid git characters`);
+    }
+    // Check for control characters (0x00-0x1F and 0x7F)
+    for (let i = 0; i < trimmed.length; i++) {
+      const code = trimmed.charCodeAt(i);
+      if (code < 0x20 || code === 0x7f) {
+        throw new Error(`${paramName} contains control characters`);
+      }
+    }
+  }
+
+  private validateFilePath(filePath: string, paramName: string = 'filePath'): void {
+    if (!filePath || typeof filePath !== 'string') {
+      throw new Error(`${paramName} must be a non-empty string`);
+    }
+    const trimmed = filePath.trim();
+    if (trimmed.includes('\0')) {
+      throw new Error(`${paramName} contains null byte`);
+    }
+    if (trimmed.includes('..')) {
+      throw new Error(`${paramName} must not contain path traversal ("..")`);
+    }
+  }
+
+  private validateCount(count: number, paramName: string = 'count'): void {
+    if (!Number.isInteger(count) || count < 1) {
+      throw new Error(`${paramName} must be a positive integer, got: ${count}`);
+    }
+    if (count > 1000) {
+      throw new Error(`${paramName} must not exceed 1000, got: ${count}`);
+    }
+  }
+
   async isRepository(): Promise<boolean> {
     try {
       await this.git.status();
@@ -64,17 +121,24 @@ export class GitEngine {
   }
 
   async getCommitDiff(sha: string): Promise<GitDiff> {
-    const diff = await this.git.diff([`${sha}~1..${sha}`, '--stat']);
-    const diffDetail = await this.git.diff([`${sha}~1..${sha}`]);
+    this.validateSha(sha);
+    const safeSha = sha.trim();
+    const diff = await this.git.diff([`${safeSha}~1..${safeSha}`, '--stat']);
+    const diffDetail = await this.git.diff([`${safeSha}~1..${safeSha}`]);
     const files = await this.parseDiff(diffDetail);
     const stats = this.parseDiffStats(diff);
     return { files, stats };
   }
 
   async getBranchDiff(branch: string, base?: string): Promise<GitDiff> {
+    this.validateBranchName(branch);
+    if (base !== undefined) {
+      this.validateBranchName(base, 'base branch');
+    }
     const baseBranch = base || (await this.getDefaultBranch());
-    const diff = await this.git.diff([`${baseBranch}..${branch}`, '--stat']);
-    const diffDetail = await this.git.diff([`${baseBranch}..${branch}`]);
+    const safeBranch = branch.trim();
+    const diff = await this.git.diff([`${baseBranch}..${safeBranch}`, '--stat']);
+    const diffDetail = await this.git.diff([`${baseBranch}..${safeBranch}`]);
     const files = await this.parseDiff(diffDetail);
     const stats = this.parseDiffStats(diff);
     return { files, stats };
@@ -114,6 +178,9 @@ export class GitEngine {
   }
 
   async getPRDiff(prNumber: number): Promise<{ prInfo: PRInfo; diff: GitDiff }> {
+    if (!Number.isInteger(prNumber) || prNumber < 1) {
+      throw new Error(`PR number must be a positive integer, got: ${prNumber}`);
+    }
     const prInfo = await this.prAnalyzer.fetchPR(prNumber);
     const files = await this.parseDiff(prInfo.diff);
     const stats = this.parseDiffStatsFromFiles(files);
@@ -121,6 +188,10 @@ export class GitEngine {
   }
 
   async getRecentCommits(filePath?: string, count: number = 10): Promise<GitCommit[]> {
+    if (filePath !== undefined) {
+      this.validateFilePath(filePath);
+    }
+    this.validateCount(count);
     const logOptions: Record<string, string> = {
       maxCount: String(count),
     };
@@ -138,6 +209,7 @@ export class GitEngine {
   }
 
   async getFileContent(filePath: string): Promise<string> {
+    this.validateFilePath(filePath);
     try {
       return await this.git.show([`HEAD:${filePath}`]);
     } catch {
@@ -146,6 +218,7 @@ export class GitEngine {
   }
 
   async getFileBlame(filePath: string): Promise<string> {
+    this.validateFilePath(filePath);
     return await this.git.raw(['blame', filePath]);
   }
 
