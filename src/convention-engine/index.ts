@@ -7,6 +7,7 @@ import {
 } from './eslint-prettier-parser.js';
 import { parseTypeScriptConfig, summarizeTypeScriptConfig } from './typescript-config-parser.js';
 import { parsePackageJson, summarizePackageJsonConfig } from './package-json-parser.js';
+import { parseCIConfig, summarizeCIConfig } from './ci-config-parser.js';
 import type {
   EditorConfig,
   EditorConfigRule,
@@ -16,6 +17,8 @@ import type {
   LintFormatConfig,
   TypeScriptConfig,
   PackageJsonConfig,
+  CIConfig,
+  CIWorkflow,
   ConventionSummary,
   ConventionEngineResult,
 } from './types.js';
@@ -33,6 +36,7 @@ export class ConventionEngine {
     const prettierConfig = parsePrettierConfig(this.repoPath);
     const typeScriptConfig = parseTypeScriptConfig(this.repoPath);
     const packageJsonConfig = parsePackageJson(this.repoPath);
+    const ciConfig = parseCIConfig(this.repoPath);
     const summaries: ConventionSummary[] = [];
 
     const editorConfigConventions = summarizeEditorConfig(editorConfig);
@@ -70,6 +74,13 @@ export class ConventionEngine {
       conventions: packageJsonConventions,
     });
 
+    const ciConventions = summarizeCIConfig(ciConfig);
+    summaries.push({
+      source: 'CI',
+      category: 'ci',
+      conventions: ciConventions,
+    });
+
     return {
       editorConfig,
       lintFormat: {
@@ -78,6 +89,7 @@ export class ConventionEngine {
       },
       typeScript: typeScriptConfig,
       packageJson: packageJsonConfig,
+      ci: ciConfig,
       summaries,
     };
   }
@@ -126,6 +138,15 @@ export class ConventionEngine {
     const packageJsonConfig = parsePackageJson(this.repoPath);
     return summarizePackageJsonConfig(packageJsonConfig);
   }
+
+  getCIConfig(): CIConfig | null {
+    return parseCIConfig(this.repoPath);
+  }
+
+  getCIConventions(): string[] {
+    const ciConfig = parseCIConfig(this.repoPath);
+    return summarizeCIConfig(ciConfig);
+  }
 }
 
 export { parseEditorConfig, summarizeEditorConfig } from './editorconfig-parser.js';
@@ -137,6 +158,7 @@ export {
 } from './eslint-prettier-parser.js';
 export { parseTypeScriptConfig, summarizeTypeScriptConfig } from './typescript-config-parser.js';
 export { parsePackageJson, summarizePackageJsonConfig } from './package-json-parser.js';
+export { parseCIConfig, summarizeCIConfig } from './ci-config-parser.js';
 export type {
   EditorConfig,
   EditorConfigRule,
@@ -146,6 +168,8 @@ export type {
   LintFormatConfig,
   TypeScriptConfig,
   PackageJsonConfig,
+  CIConfig,
+  CIWorkflow,
   ConventionSummary,
   ConventionEngineResult,
 } from './types.js';

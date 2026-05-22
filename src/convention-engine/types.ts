@@ -80,6 +80,27 @@ export interface PackageJsonConfig {
   detectedTestFramework: string | null;
 }
 
+export interface CIWorkflow {
+  name: string;
+  filePath: string;
+  provider: 'github' | 'gitlab';
+  triggers: string[];
+  jobs: string[];
+  steps: string[];
+  hasTestStep: boolean;
+  hasLintStep: boolean;
+  hasBuildStep: boolean;
+  hasDeployStep: boolean;
+  nodeVersion: string | null;
+}
+
+export interface CIConfig {
+  provider: 'github' | 'gitlab' | null;
+  workflows: CIWorkflow[];
+  hasGitHubActions: boolean;
+  hasGitLabCI: boolean;
+}
+
 export interface ConventionSummary {
   source: string;
   category: 'formatting' | 'lint' | 'typescript' | 'package' | 'ci' | 'test';
@@ -91,5 +112,6 @@ export interface ConventionEngineResult {
   lintFormat: LintFormatConfig;
   typeScript: TypeScriptConfig | null;
   packageJson: PackageJsonConfig | null;
+  ci: CIConfig | null;
   summaries: ConventionSummary[];
 }
