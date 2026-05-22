@@ -1,4 +1,4 @@
 export const VERSION = '0.1.0';
 
-export { GitEngine } from './git-engine/index.js';
-export type { GitDiff, DiffFile, GitCommit } from './git-engine/index.js';
+export { GitEngine, PRAnalyzer } from './git-engine/index.js';
+export type { GitDiff, DiffFile, GitCommit, PRInfo } from './git-engine/index.js';

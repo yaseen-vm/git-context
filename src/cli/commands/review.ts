@@ -39,11 +39,22 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
   console.log('');
 
   try {
-    const diff = await getDiff(gitEngine, source);
-    displayDiff(diff);
+    const result = await getDiff(gitEngine, source);
+
+    if (result.prInfo) {
+      console.log(`PR #${result.prInfo.number}: ${result.prInfo.title}`);
+      console.log(`Author: ${result.prInfo.author}`);
+      console.log(`Base: ${result.prInfo.baseBranch} <- Head: ${result.prInfo.headBranch}`);
+      if (result.prInfo.description) {
+        console.log(`\nDescription:\n${result.prInfo.description}`);
+      }
+      console.log('');
+    }
+
+    displayDiff(result.diff);
 
     if (options.history !== false) {
-      await displayHistory(gitEngine, diff);
+      await displayHistory(gitEngine, result.diff);
     }
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : error);
@@ -51,21 +62,49 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
   }
 }
 
+interface DiffResult {
+  diff: GitDiff;
+  prInfo?: {
+    number: number;
+    title: string;
+    author: string;
+    baseBranch: string;
+    headBranch: string;
+    description: string;
+  };
+}
+
 async function getDiff(
   gitEngine: GitEngine,
   source: { type: string; value: string },
-): Promise<GitDiff> {
+): Promise<DiffResult> {
   switch (source.type) {
     case 'staged':
-      return gitEngine.getStagedDiff();
+      return { diff: await gitEngine.getStagedDiff() };
     case 'unstaged':
-      return gitEngine.getUnstagedDiff();
+      return { diff: await gitEngine.getUnstagedDiff() };
     case 'commit':
-      return gitEngine.getCommitDiff(source.value);
+      return { diff: await gitEngine.getCommitDiff(source.value) };
     case 'branch':
-      return gitEngine.getBranchDiff(source.value);
-    case 'pr':
-      throw new Error('PR analysis not yet implemented');
+      return { diff: await gitEngine.getBranchDiff(source.value) };
+    case 'pr': {
+      const prNumber = parseInt(source.value, 10);
+      if (isNaN(prNumber)) {
+        throw new Error(`Invalid PR number: ${source.value}`);
+      }
+      const { prInfo, diff } = await gitEngine.getPRDiff(prNumber);
+      return {
+        diff,
+        prInfo: {
+          number: prInfo.number,
+          title: prInfo.title,
+          author: prInfo.author,
+          baseBranch: prInfo.baseBranch,
+          headBranch: prInfo.headBranch,
+          description: prInfo.description,
+        },
+      };
+    }
     default:
       throw new Error(`Unknown source type: ${source.type}`);
   }

@@ -1,4 +1,5 @@
 import simpleGit, { SimpleGit } from 'simple-git';
+import { PRAnalyzer, PRInfo } from './pr-analyzer.js';
 
 export interface GitDiff {
   files: DiffFile[];
@@ -28,10 +29,12 @@ export interface GitCommit {
 export class GitEngine {
   private git: SimpleGit;
   private repoPath: string;
+  private prAnalyzer: PRAnalyzer;
 
   constructor(repoPath: string = process.cwd()) {
     this.repoPath = repoPath;
     this.git = simpleGit(repoPath);
+    this.prAnalyzer = new PRAnalyzer();
   }
 
   async isRepository(): Promise<boolean> {
@@ -76,6 +79,13 @@ export class GitEngine {
     return { files, stats };
   }
 
+  async getPRDiff(prNumber: number): Promise<{ prInfo: PRInfo; diff: GitDiff }> {
+    const prInfo = await this.prAnalyzer.fetchPR(prNumber);
+    const files = await this.parseDiff(prInfo.diff);
+    const stats = this.parseDiffStatsFromFiles(files);
+    return { prInfo, diff: { files, stats } };
+  }
+
   async getRecentCommits(filePath?: string, count: number = 10): Promise<GitCommit[]> {
     const logOptions: Record<string, string> = {
       maxCount: String(count),
@@ -115,6 +125,15 @@ export class GitEngine {
     }
   }
 
+  async isPRAnalysisAvailable(): Promise<boolean> {
+    return this.prAnalyzer.isAvailable();
+  }
+
+  async detectRemoteProvider(): Promise<string | null> {
+    const remote = await this.prAnalyzer.detectRemote();
+    return remote?.provider || null;
+  }
+
   private parseDiffStats(diffStat: string): {
     insertions: number;
     deletions: number;
@@ -133,6 +152,24 @@ export class GitEngine {
       };
     }
     return { insertions: 0, deletions: 0, filesChanged: 0 };
+  }
+
+  private parseDiffStatsFromFiles(files: DiffFile[]): {
+    insertions: number;
+    deletions: number;
+    filesChanged: number;
+  } {
+    let insertions = 0;
+    let deletions = 0;
+    for (const file of files) {
+      insertions += file.additions;
+      deletions += file.deletions;
+    }
+    return {
+      filesChanged: files.length,
+      insertions,
+      deletions,
+    };
   }
 
   private async parseDiff(diffDetail: string): Promise<DiffFile[]> {
@@ -170,3 +207,5 @@ export class GitEngine {
     return files;
   }
 }
+
+export { PRAnalyzer, PRInfo } from './pr-analyzer.js';
