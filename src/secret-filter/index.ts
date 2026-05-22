@@ -97,15 +97,13 @@ export class SecretFilter {
 
   private redactPasswords(content: string): string {
     const patterns = [
-      /(?:password|passwd|pwd)\s*[:=]\s*['"]?([^\s'"]{8,})['"]?/gi,
-      /(?:db[_-]?password|database[_-]?password)\s*[:=]\s*['"]?([^\s'"]{8,})['"]?/gi,
+      /((?:password|passwd|pwd)\s*[:=]\s*)(['"]?)([^\s'"]{8,})\2/gi,
+      /((?:db[_-]?password|database[_-]?password)\s*[:=]\s*)(['"]?)([^\s'"]{8,})\2/gi,
     ];
 
     let result = content;
     for (const pattern of patterns) {
-      result = result.replace(pattern, (match) => {
-        return match.replace(/['"]?([^\s'"]{8,})['"]?/, '[REDACTED_PASSWORD]');
-      });
+      result = result.replace(pattern, '$1[REDACTED_PASSWORD]');
     }
 
     return result;
