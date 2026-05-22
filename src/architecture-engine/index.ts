@@ -36,8 +36,8 @@ export class ArchitectureEngine {
     this.cachedPatterns = null;
   }
 
-  analyze(): ArchitectureAnalysisResult {
-    const folderStructure = this.getFolderStructure();
+  async analyze(): Promise<ArchitectureAnalysisResult> {
+    const folderStructure = await this.getFolderStructure();
     const documentation = this.getDocumentation();
     const serviceMap = this.getServiceMap();
     const patterns = this.getPatterns();
@@ -74,23 +74,25 @@ export class ArchitectureEngine {
     };
   }
 
-  getFolderStructure(): FolderStructure {
+  async getFolderStructure(): Promise<FolderStructure> {
     if (!this.cachedFolderStructure) {
-      this.cachedFolderStructure = analyzeFolderStructure(this.repoPath);
+      this.cachedFolderStructure = await analyzeFolderStructure(this.repoPath);
     }
     return this.cachedFolderStructure;
   }
 
-  getModuleBoundaries(): ModuleBoundary[] {
-    return this.getFolderStructure().moduleBoundaries;
+  async getModuleBoundaries(): Promise<ModuleBoundary[]> {
+    const structure = await this.getFolderStructure();
+    return structure.moduleBoundaries;
   }
 
-  getEntryPoints(): EntryPoint[] {
-    return this.getFolderStructure().entryPoints;
+  async getEntryPoints(): Promise<EntryPoint[]> {
+    const structure = await this.getFolderStructure();
+    return structure.entryPoints;
   }
 
-  getDirectoryTree(maxDepth: number = 3): string[] {
-    const structure = this.getFolderStructure();
+  async getDirectoryTree(maxDepth: number = 3): Promise<string[]> {
+    const structure = await this.getFolderStructure();
     return generateDirectoryTree(structure.tree, this.repoPath, maxDepth);
   }
 
@@ -120,8 +122,8 @@ export class ArchitectureEngine {
     return this.cachedPatterns;
   }
 
-  getSummary(): string[] {
-    const result = this.analyze();
+  async getSummary(): Promise<string[]> {
+    const result = await this.analyze();
     return result.summary;
   }
 }

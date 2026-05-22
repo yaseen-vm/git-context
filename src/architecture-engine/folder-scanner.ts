@@ -47,17 +47,16 @@ function shouldIgnoreDir(dirName: string): boolean {
   return IGNORE_DIRS.has(dirName) || dirName.startsWith('.');
 }
 
-function loadIgnoreRules(repoPath: string): Ignore {
+async function loadIgnoreRules(repoPath: string): Promise<Ignore> {
   const ig = ignore();
 
   const ignoreFiles = ['.gitignore', '.ignore'];
   for (const ignoreFile of ignoreFiles) {
     const ignorePath = path.join(repoPath, ignoreFile);
     try {
-      if (fs.existsSync(ignorePath)) {
-        const content = fs.readFileSync(ignorePath, 'utf-8');
-        ig.add(content);
-      }
+      await fs.promises.access(ignorePath);
+      const content = await fs.promises.readFile(ignorePath, 'utf-8');
+      ig.add(content);
     } catch {
       // Skip files we can't read
     }
@@ -75,23 +74,25 @@ function getEntryPointType(name: string): EntryPoint['type'] | null {
   return null;
 }
 
-export function scanDirectory(
+export async function scanDirectory(
   dirPath: string,
   maxDepth: number = 10,
   currentDepth: number = 0,
   ignoreFilter?: Ignore,
   rootPath?: string,
-): DirectoryInfo | null {
+): Promise<DirectoryInfo | null> {
   if (currentDepth > maxDepth) return null;
 
   try {
-    const stats = fs.statSync(dirPath);
+    const stats = await fs.promises.stat(dirPath);
     if (!stats.isDirectory()) return null;
 
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
     const files: FileInfo[] = [];
     const subdirectories: DirectoryInfo[] = [];
     const basePath = rootPath || dirPath;
+
+    const promises: Promise<void>[] = [];
 
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
@@ -103,35 +104,40 @@ export function scanDirectory(
           if (ignoreFilter && ignoreFilter.ignores(dirRelativePath)) {
             continue;
           }
-          const subDir = scanDirectory(
-            fullPath,
-            maxDepth,
-            currentDepth + 1,
-            ignoreFilter,
-            basePath,
+          promises.push(
+            scanDirectory(fullPath, maxDepth, currentDepth + 1, ignoreFilter, basePath).then(
+              (subDir) => {
+                if (subDir) {
+                  subdirectories.push(subDir);
+                }
+              },
+            ),
           );
-          if (subDir) {
-            subdirectories.push(subDir);
-          }
         }
       } else {
         if (ignoreFilter && ignoreFilter.ignores(relativePath)) {
           continue;
         }
-        try {
-          const fileStats = fs.statSync(fullPath);
-          files.push({
-            path: fullPath,
-            name: entry.name,
-            extension: path.extname(entry.name).toLowerCase(),
-            size: fileStats.size,
-            isDirectory: false,
-          });
-        } catch {
-          // Skip files we can't stat
-        }
+        promises.push(
+          fs.promises
+            .stat(fullPath)
+            .then((fileStats) => {
+              files.push({
+                path: fullPath,
+                name: entry.name,
+                extension: path.extname(entry.name).toLowerCase(),
+                size: fileStats.size,
+                isDirectory: false,
+              });
+            })
+            .catch(() => {
+              // Skip files we can't stat
+            }),
+        );
       }
     }
+
+    await Promise.all(promises);
 
     return {
       path: dirPath,
@@ -240,9 +246,9 @@ function calculateStats(dirInfo: DirectoryInfo): {
   return { totalFiles, totalDirectories, maxDepth };
 }
 
-export function analyzeFolderStructure(repoPath: string): FolderStructure {
-  const ignoreFilter = loadIgnoreRules(repoPath);
-  const rootDir = scanDirectory(repoPath, 10, 0, ignoreFilter, repoPath);
+export async function analyzeFolderStructure(repoPath: string): Promise<FolderStructure> {
+  const ignoreFilter = await loadIgnoreRules(repoPath);
+  const rootDir = await scanDirectory(repoPath, 10, 0, ignoreFilter, repoPath);
 
   if (!rootDir) {
     return {
