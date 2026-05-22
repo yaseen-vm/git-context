@@ -29,49 +29,42 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
 
   const isRepo = await gitEngine.isRepository();
   if (!isRepo) {
-    console.error('Error: Not a git repository');
-    process.exit(1);
+    throw new Error('Not a git repository');
   }
 
   const source = determineSource(options);
   if (!source) {
-    console.error(
-      'Error: Please specify a source: --staged, --unstaged, --commit <sha>, --branch <name>, or --pr <number>',
+    throw new Error(
+      'Please specify a source: --staged, --unstaged, --commit <sha>, --branch <name>, or --pr <number>',
     );
-    process.exit(1);
   }
 
   const format = validateFormat(options.format);
   const focus = options.focus ? validateFocus(options.focus) : undefined;
 
-  try {
-    const result = await getDiff(gitEngine, source);
+  const result = await getDiff(gitEngine, source);
 
-    const context = await buildReviewContext(gitEngine, result, options);
+  const context = await buildReviewContext(gitEngine, result, options);
 
-    const promptBuilderOptions: PromptBuilderOptions = {
-      format,
-      focus,
-      maxTokens: options.maxTokens ? parseInt(options.maxTokens, 10) : undefined,
-    };
+  const promptBuilderOptions: PromptBuilderOptions = {
+    format,
+    focus,
+    maxTokens: options.maxTokens ? parseInt(options.maxTokens, 10) : undefined,
+  };
 
-    const promptBuilder = new PromptBuilder(promptBuilderOptions);
-    const promptResult = await promptBuilder.buildPrompt(context);
+  const promptBuilder = new PromptBuilder(promptBuilderOptions);
+  const promptResult = await promptBuilder.buildPrompt(context);
 
-    if (options.output) {
-      const fs = await import('fs');
-      fs.writeFileSync(options.output, promptResult.content, 'utf-8');
-      console.log(`Output written to ${options.output}`);
-    } else {
-      console.log(promptResult.content);
-    }
-
-    console.error(`\nFormat: ${promptResult.format}`);
-    console.error(`Estimated tokens: ${promptResult.tokenEstimate}`);
-  } catch (error) {
-    console.error('Error:', error instanceof Error ? error.message : error);
-    process.exit(1);
+  if (options.output) {
+    const fs = await import('fs');
+    fs.writeFileSync(options.output, promptResult.content, 'utf-8');
+    console.log(`Output written to ${options.output}`);
+  } else {
+    console.log(promptResult.content);
   }
+
+  console.error(`\nFormat: ${promptResult.format}`);
+  console.error(`Estimated tokens: ${promptResult.tokenEstimate}`);
 }
 
 interface DiffResult {
