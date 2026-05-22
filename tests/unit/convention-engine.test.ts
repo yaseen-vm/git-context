@@ -1633,4 +1633,298 @@ export default defineConfig({
       });
     });
   });
+
+  describe('Issue #81: edge-case coverage', () => {
+    describe('ESLint parser edge cases', () => {
+      it('should handle extends as a single string (not array)', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.eslintrc.json'),
+          JSON.stringify({
+            extends: 'eslint:recommended',
+            rules: {},
+          }),
+        );
+
+        const config = parseESLintConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.extends).toEqual(['eslint:recommended']);
+      });
+
+      it('should handle plugins as a single string (not array)', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.eslintrc.json'),
+          JSON.stringify({
+            plugins: '@typescript-eslint',
+            rules: {},
+          }),
+        );
+
+        const config = parseESLintConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.plugins).toEqual(['@typescript-eslint']);
+        expect(config!.hasTypeScriptSupport).toBe(true);
+      });
+
+      it('should parse config with overrides (nested config)', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.eslintrc.json'),
+          JSON.stringify({
+            extends: ['eslint:recommended'],
+            rules: { 'no-console': 'warn' },
+            overrides: [
+              {
+                files: ['*.ts'],
+                extends: ['plugin:@typescript-eslint/recommended'],
+                rules: { '@typescript-eslint/no-explicit-any': 'error' },
+              },
+            ],
+          }),
+        );
+
+        const config = parseESLintConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.extends).toContain('eslint:recommended');
+        expect(config!.rules).toEqual({ 'no-console': 'warn' });
+      });
+
+      it('should return default config when JSON is malformed', () => {
+        fs.writeFileSync(path.join(tmpDir, '.eslintrc.json'), '{ invalid json }');
+
+        const config = parseESLintConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.configFile).toBe('.eslintrc.json');
+        expect(config!.extends).toEqual([]);
+        expect(config!.plugins).toEqual([]);
+      });
+    });
+
+    describe('Prettier parser edge cases', () => {
+      it('should parse .prettierrc.toml config', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.prettierrc.toml'),
+          `semi = true
+singleQuote = false
+tabWidth = 4
+trailingComma = "es5"
+printWidth = 120
+`,
+        );
+
+        const config = parsePrettierConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.configFile).toBe('.prettierrc.toml');
+        expect(config!.hasSemi).toBe(true);
+        expect(config!.singleQuote).toBe(false);
+        expect(config!.tabWidth).toBe(4);
+        expect(config!.printWidth).toBe(120);
+      });
+
+      it('should parse .prettierrc.yaml config', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.prettierrc.yaml'),
+          `semi: false
+singleQuote: true
+tabWidth: 2
+printWidth: 80
+`,
+        );
+
+        const config = parsePrettierConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.configFile).toBe('.prettierrc.yaml');
+        expect(config!.hasSemi).toBe(false);
+        expect(config!.singleQuote).toBe(true);
+        expect(config!.tabWidth).toBe(2);
+        expect(config!.printWidth).toBe(80);
+      });
+
+      it('should handle config with unknown/unsupported options gracefully', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.prettierrc.json'),
+          JSON.stringify({
+            semi: true,
+            experimentalFeature: 'unknown-value',
+            anotherUnknownKey: 42,
+          }),
+        );
+
+        const config = parsePrettierConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasSemi).toBe(true);
+        expect(config!.options.experimentalFeature).toBe('unknown-value');
+        expect(config!.options.anotherUnknownKey).toBe(42);
+      });
+    });
+
+    describe('TypeScript parser edge cases', () => {
+      it('should handle tsconfig with no compilerOptions', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            include: ['src/**/*'],
+            exclude: ['node_modules'],
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.isStrict).toBe(false);
+        expect(config!.target).toBeNull();
+        expect(config!.module).toBeNull();
+        expect(config!.include).toContain('src/**/*');
+      });
+
+      it('should handle compilerOptions as non-object gracefully', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: 'invalid-string',
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.isStrict).toBe(false);
+        expect(config!.target).toBeNull();
+      });
+
+      it('should handle paths defined without baseUrl', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              paths: {
+                '@/*': ['./src/*'],
+              },
+            },
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.paths['@/*']).toEqual(['./src/*']);
+        expect(config!.baseUrl).toBeNull();
+      });
+    });
+
+    describe('CI parser edge cases', () => {
+      it('should parse multiple GitHub Actions workflows from the same directory', () => {
+        fs.mkdirSync(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'ci.yml'),
+          `name: CI
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+        );
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'release.yml'),
+          `name: Release
+on:
+  push:
+    branches: [main]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm publish`,
+        );
+
+        const config = parseCIConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.workflows).toHaveLength(2);
+        expect(config!.workflows.map((w) => w.name)).toContain('CI');
+        expect(config!.workflows.map((w) => w.name)).toContain('Release');
+      });
+
+      it('should parse GitLab CI with multi-line script blocks', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.gitlab-ci.yml'),
+          `stages:
+  - test
+
+test:
+  stage: test
+  script:
+    - npm ci
+    - npm test
+    - npm run lint`,
+        );
+
+        const config = parseCIConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasGitLabCI).toBe(true);
+        const workflow = config!.workflows[0];
+        expect(workflow.hasTestStep).toBe(true);
+        expect(workflow.hasLintStep).toBe(true);
+      });
+
+      it('should handle a GitHub Actions workflow with no jobs section', () => {
+        fs.mkdirSync(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'empty.yml'),
+          `name: Empty Workflow
+on: push
+`,
+        );
+
+        const config = parseCIConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasGitHubActions).toBe(true);
+        const workflow = config!.workflows[0];
+        expect(workflow.jobs).toEqual([]);
+        expect(workflow.hasTestStep).toBe(false);
+        expect(workflow.hasBuildStep).toBe(false);
+      });
+    });
+
+    describe('Test framework parser edge cases', () => {
+      it('should prefer Vitest over Jest when both are present', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              jest: '^29.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBe('Vitest');
+      });
+
+      it('should detect coverage from .nycrc even when no test framework is identified', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.nycrc'),
+          JSON.stringify({
+            include: ['src/**/*.js'],
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBeNull();
+        expect(config!.hasCoverage).toBe(true);
+        expect(config!.coverageProvider).toBe('nyc');
+      });
+
+      it('should detect framework from config file even without a matching package.json entry', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'jest.config.js'),
+          `module.exports = { testMatch: ['**/*.test.ts'] };`,
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBe('Jest');
+        expect(config!.configFile).toBe('jest.config.js');
+      });
+    });
+  });
 });
