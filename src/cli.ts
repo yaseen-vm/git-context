@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
-import { VERSION } from './index.js';
+import { createCLI } from './cli/index.js';
 
-console.log(`git-context v${VERSION}`);
+const program = createCLI();
+program.parse(process.argv);
