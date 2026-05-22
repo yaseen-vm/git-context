@@ -1,4 +1,5 @@
 import simpleGit, { SimpleGit } from 'simple-git';
+import parseDiff from 'parse-diff';
 import { PRAnalyzer, PRInfo } from './pr-analyzer.js';
 
 export interface GitDiff {
@@ -174,34 +175,74 @@ export class GitEngine {
 
   private async parseDiff(diffDetail: string): Promise<DiffFile[]> {
     const files: DiffFile[] = [];
-    const chunks = diffDetail.split(/^diff --git /m).filter(Boolean);
 
-    for (const chunk of chunks) {
-      const lines = chunk.split('\n');
-      const headerLine = lines[0] || '';
-      const pathMatch = headerLine.match(/a\/(.+) b\/(.+)/);
-      if (!pathMatch) continue;
+    try {
+      const parsedFiles = parseDiff(diffDetail);
 
-      const filePath = pathMatch[2];
-      let status: DiffFile['status'] = 'modified';
-      let additions = 0;
-      let deletions = 0;
+      for (const file of parsedFiles) {
+        const filePath = file.to || file.from || '';
+        let status: DiffFile['status'] = 'modified';
 
-      for (const line of lines) {
-        if (line.startsWith('new file')) status = 'added';
-        else if (line.startsWith('deleted file')) status = 'deleted';
-        else if (line.startsWith('rename from')) status = 'renamed';
-        else if (line.startsWith('+') && !line.startsWith('+++')) additions++;
-        else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+        if (file.new) {
+          status = 'added';
+        } else if (file.deleted) {
+          status = 'deleted';
+        } else if (file.rename) {
+          status = 'renamed';
+        }
+
+        let additions = 0;
+        let deletions = 0;
+
+        for (const chunk of file.chunks) {
+          for (const change of chunk.changes) {
+            if (change.type === 'add') {
+              additions++;
+            } else if (change.type === 'del') {
+              deletions++;
+            }
+          }
+        }
+
+        files.push({
+          path: filePath,
+          status,
+          additions,
+          deletions,
+          diff: diffDetail,
+        });
       }
+    } catch {
+      // Fallback to simple parsing if parse-diff fails
+      const chunks = diffDetail.split(/^diff --git /m).filter(Boolean);
 
-      files.push({
-        path: filePath,
-        status,
-        additions,
-        deletions,
-        diff: chunk,
-      });
+      for (const chunk of chunks) {
+        const lines = chunk.split('\n');
+        const headerLine = lines[0] || '';
+        const pathMatch = headerLine.match(/a\/(.+) b\/(.+)/);
+        if (!pathMatch) continue;
+
+        const filePath = pathMatch[2];
+        let status: DiffFile['status'] = 'modified';
+        let additions = 0;
+        let deletions = 0;
+
+        for (const line of lines) {
+          if (line.startsWith('new file')) status = 'added';
+          else if (line.startsWith('deleted file')) status = 'deleted';
+          else if (line.startsWith('rename from')) status = 'renamed';
+          else if (line.startsWith('+') && !line.startsWith('+++')) additions++;
+          else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+        }
+
+        files.push({
+          path: filePath,
+          status,
+          additions,
+          deletions,
+          diff: chunk,
+        });
+      }
     }
 
     return files;
