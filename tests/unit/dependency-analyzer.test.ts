@@ -322,4 +322,126 @@ describe('DependencyAnalyzer', () => {
       expect(files).toContain('src/utils.ts');
     });
   });
+
+  describe('Issue #14: related file discovery', () => {
+    it('should find test files for source files', () => {
+      fs.writeFileSync(path.join(tmpDir, 'src', 'foo.ts'), 'export const foo = {};');
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'foo.test.ts'),
+        'import { foo } from "./foo"; test("foo", () => {});',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      analyzer.analyzeFiles(['src/foo.ts', 'src/foo.test.ts']);
+
+      const testFiles = analyzer.findTestFiles('src/foo.ts');
+      expect(testFiles).toContain('src/foo.test.ts');
+    });
+
+    it('should find spec files for source files', () => {
+      fs.writeFileSync(path.join(tmpDir, 'src', 'bar.tsx'), 'export const Bar = () => {};');
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'bar.spec.tsx'),
+        'import { Bar } from "./bar"; test("bar", () => {});',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      analyzer.analyzeFiles(['src/bar.tsx', 'src/bar.spec.tsx']);
+
+      const testFiles = analyzer.findTestFiles('src/bar.tsx');
+      expect(testFiles).toContain('src/bar.spec.tsx');
+    });
+
+    it('should find config files referencing source files', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: { target: 'ES2022' },
+          include: ['src/foo.ts'],
+        }),
+      );
+      fs.writeFileSync(path.join(tmpDir, 'src', 'foo.ts'), 'export const foo = {};');
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      analyzer.analyzeFiles(['src/foo.ts']);
+
+      const configFiles = analyzer.findConfigFilesReferencing('src/foo.ts');
+      expect(configFiles).toContain('tsconfig.json');
+    });
+
+    it('should find shared utilities used by multiple files', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src', 'utils'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'utils', 'helper.ts'),
+        'export const helper = () => {};',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'a.ts'),
+        'import { helper } from "./utils/helper"; export const a = helper;',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'b.ts'),
+        'import { helper } from "./utils/helper"; export const b = helper;',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      analyzer.analyzeFiles(['src/a.ts', 'src/b.ts', 'src/utils/helper.ts']);
+
+      const utilities = analyzer.findSharedUtilities(['src/a.ts', 'src/b.ts']);
+      expect(utilities).toContain('src/utils/helper.ts');
+    });
+
+    it('should find all related files for a set of changed files', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src', 'utils'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'utils', 'helper.ts'),
+        'export const helper = () => {};',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.ts'),
+        'import { helper } from "./utils/helper"; export const main = helper;',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.test.ts'),
+        'import { main } from "./index"; test("main", () => {});',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      analyzer.analyzeFiles(['src/index.ts', 'src/utils/helper.ts', 'src/index.test.ts']);
+
+      const related = analyzer.findAllRelatedFiles(['src/index.ts']);
+      const paths = related.map((r) => r.path);
+      expect(paths).toContain('src/utils/helper.ts');
+      expect(paths).toContain('src/index.test.ts');
+    });
+
+    it('should classify related files by relation type', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src', 'utils'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'utils', 'helper.ts'),
+        'export const helper = () => {};',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.ts'),
+        'import { helper } from "./utils/helper"; export const main = helper;',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.test.ts'),
+        'import { main } from "./index"; test("main", () => {});',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      analyzer.analyzeFiles(['src/index.ts', 'src/utils/helper.ts', 'src/index.test.ts']);
+
+      const related = analyzer.findAllRelatedFiles(['src/index.ts']);
+      const testFile = related.find((r) => r.path === 'src/index.test.ts');
+      const utilFile = related.find((r) => r.path === 'src/utils/helper.ts');
+
+      expect(testFile).toBeDefined();
+      expect(testFile!.relation).toBe('test');
+
+      expect(utilFile).toBeDefined();
+      expect(utilFile!.relation).toBe('import');
+    });
+  });
 });
