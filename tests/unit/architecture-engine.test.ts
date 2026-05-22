@@ -38,8 +38,8 @@ describe('ArchitectureEngine', () => {
 
   describe('Issue #21: Folder structure analysis', () => {
     describe('Directory scanning', () => {
-      it('should scan an empty directory', () => {
-        const result = scanDirectory(tmpDir);
+      it('should scan an empty directory', async () => {
+        const result = await scanDirectory(tmpDir);
         expect(result).not.toBeNull();
         expect(result!.path).toBe(tmpDir);
         expect(result!.files).toHaveLength(0);
@@ -48,60 +48,60 @@ describe('ArchitectureEngine', () => {
         expect(result!.subdirectoryCount).toBe(0);
       });
 
-      it('should scan directory with files', () => {
+      it('should scan directory with files', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), 'export {};');
         fs.writeFileSync(path.join(tmpDir, 'utils.ts'), 'export {};');
         fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
 
-        const result = scanDirectory(tmpDir);
+        const result = await scanDirectory(tmpDir);
         expect(result).not.toBeNull();
         expect(result!.files).toHaveLength(3);
         expect(result!.fileCount).toBe(3);
       });
 
-      it('should scan directory with subdirectories', () => {
+      it('should scan directory with subdirectories', async () => {
         fs.mkdirSync(path.join(tmpDir, 'src'));
         fs.mkdirSync(path.join(tmpDir, 'tests'));
         fs.writeFileSync(path.join(tmpDir, 'src', 'index.ts'), 'export {};');
 
-        const result = scanDirectory(tmpDir);
+        const result = await scanDirectory(tmpDir);
         expect(result).not.toBeNull();
         expect(result!.subdirectories).toHaveLength(2);
         expect(result!.subdirectoryCount).toBe(2);
       });
 
-      it('should ignore node_modules', () => {
+      it('should ignore node_modules', async () => {
         fs.mkdirSync(path.join(tmpDir, 'node_modules'));
         fs.writeFileSync(path.join(tmpDir, 'node_modules', 'pkg.js'), '');
 
-        const result = scanDirectory(tmpDir);
+        const result = await scanDirectory(tmpDir);
         expect(result).not.toBeNull();
         expect(result!.subdirectories).toHaveLength(0);
       });
 
-      it('should ignore .git directory', () => {
+      it('should ignore .git directory', async () => {
         fs.mkdirSync(path.join(tmpDir, '.git'));
 
-        const result = scanDirectory(tmpDir);
+        const result = await scanDirectory(tmpDir);
         expect(result).not.toBeNull();
         expect(result!.subdirectories).toHaveLength(0);
       });
 
-      it('should ignore dist and build directories', () => {
+      it('should ignore dist and build directories', async () => {
         fs.mkdirSync(path.join(tmpDir, 'dist'));
         fs.mkdirSync(path.join(tmpDir, 'build'));
 
-        const result = scanDirectory(tmpDir);
+        const result = await scanDirectory(tmpDir);
         expect(result).not.toBeNull();
         expect(result!.subdirectories).toHaveLength(0);
       });
 
-      it('should track file extensions', () => {
+      it('should track file extensions', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), '');
         fs.writeFileSync(path.join(tmpDir, 'utils.js'), '');
         fs.writeFileSync(path.join(tmpDir, 'style.css'), '');
 
-        const result = scanDirectory(tmpDir);
+        const result = await scanDirectory(tmpDir);
         expect(result).not.toBeNull();
         const extensions = result!.files.map((f) => f.extension).sort();
         expect(extensions).toContain('.ts');
@@ -109,11 +109,11 @@ describe('ArchitectureEngine', () => {
         expect(extensions).toContain('.css');
       });
 
-      it('should track file sizes', () => {
+      it('should track file sizes', async () => {
         fs.writeFileSync(path.join(tmpDir, 'small.txt'), 'hi');
         fs.writeFileSync(path.join(tmpDir, 'large.txt'), 'a'.repeat(1000));
 
-        const result = scanDirectory(tmpDir);
+        const result = await scanDirectory(tmpDir);
         expect(result).not.toBeNull();
         const smallFile = result!.files.find((f) => f.name === 'small.txt');
         const largeFile = result!.files.find((f) => f.name === 'large.txt');
@@ -121,12 +121,12 @@ describe('ArchitectureEngine', () => {
         expect(largeFile!.size).toBe(1000);
       });
 
-      it('should handle nested directory structure', () => {
+      it('should handle nested directory structure', async () => {
         fs.mkdirSync(path.join(tmpDir, 'src', 'modules', 'auth'), { recursive: true });
         fs.writeFileSync(path.join(tmpDir, 'src', 'index.ts'), '');
         fs.writeFileSync(path.join(tmpDir, 'src', 'modules', 'auth', 'login.ts'), '');
 
-        const result = scanDirectory(tmpDir);
+        const result = await scanDirectory(tmpDir);
         expect(result).not.toBeNull();
         expect(result!.subdirectories).toHaveLength(1);
 
@@ -141,12 +141,12 @@ describe('ArchitectureEngine', () => {
     });
 
     describe('Module boundary detection', () => {
-      it('should detect module with package.json', () => {
+      it('should detect module with package.json', async () => {
         fs.mkdirSync(path.join(tmpDir, 'packages', 'core'), { recursive: true });
         fs.writeFileSync(path.join(tmpDir, 'packages', 'core', 'package.json'), '{}');
         fs.writeFileSync(path.join(tmpDir, 'packages', 'core', 'index.ts'), '');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const boundaries = findModuleBoundaries(rootDir!, tmpDir);
@@ -155,11 +155,11 @@ describe('ArchitectureEngine', () => {
         expect(boundaries[0].type).toBe('package');
       });
 
-      it('should detect module with tsconfig.json', () => {
+      it('should detect module with tsconfig.json', async () => {
         fs.mkdirSync(path.join(tmpDir, 'src', 'utils'), { recursive: true });
         fs.writeFileSync(path.join(tmpDir, 'src', 'utils', 'tsconfig.json'), '{}');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const boundaries = findModuleBoundaries(rootDir!, tmpDir);
@@ -168,12 +168,12 @@ describe('ArchitectureEngine', () => {
         expect(boundaries[0].type).toBe('module');
       });
 
-      it('should detect entry points in modules', () => {
+      it('should detect entry points in modules', async () => {
         fs.mkdirSync(path.join(tmpDir, 'packages', 'core'), { recursive: true });
         fs.writeFileSync(path.join(tmpDir, 'packages', 'core', 'package.json'), '{}');
         fs.writeFileSync(path.join(tmpDir, 'packages', 'core', 'index.ts'), 'export {};');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const boundaries = findModuleBoundaries(rootDir!, tmpDir);
@@ -181,24 +181,24 @@ describe('ArchitectureEngine', () => {
         expect(boundaries[0].entryPoints).toHaveLength(1);
       });
 
-      it('should not detect root as module boundary', () => {
+      it('should not detect root as module boundary', async () => {
         fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
         fs.writeFileSync(path.join(tmpDir, 'tsconfig.json'), '{}');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const boundaries = findModuleBoundaries(rootDir!, tmpDir);
         expect(boundaries).toHaveLength(0);
       });
 
-      it('should detect multiple module boundaries', () => {
+      it('should detect multiple module boundaries', async () => {
         fs.mkdirSync(path.join(tmpDir, 'packages', 'core'), { recursive: true });
         fs.mkdirSync(path.join(tmpDir, 'packages', 'utils'), { recursive: true });
         fs.writeFileSync(path.join(tmpDir, 'packages', 'core', 'package.json'), '{}');
         fs.writeFileSync(path.join(tmpDir, 'packages', 'utils', 'package.json'), '{}');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const boundaries = findModuleBoundaries(rootDir!, tmpDir);
@@ -207,10 +207,10 @@ describe('ArchitectureEngine', () => {
     });
 
     describe('Entry point detection', () => {
-      it('should detect index.ts entry point', () => {
+      it('should detect index.ts entry point', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), 'export {};');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const entryPoints = findEntryPoints(rootDir!);
@@ -219,10 +219,10 @@ describe('ArchitectureEngine', () => {
         expect(entryPoints[0].type).toBe('index');
       });
 
-      it('should detect main.ts entry point', () => {
+      it('should detect main.ts entry point', async () => {
         fs.writeFileSync(path.join(tmpDir, 'main.ts'), '');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const entryPoints = findEntryPoints(rootDir!);
@@ -230,10 +230,10 @@ describe('ArchitectureEngine', () => {
         expect(entryPoints[0].type).toBe('main');
       });
 
-      it('should detect app.ts entry point', () => {
+      it('should detect app.ts entry point', async () => {
         fs.writeFileSync(path.join(tmpDir, 'app.ts'), '');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const entryPoints = findEntryPoints(rootDir!);
@@ -241,10 +241,10 @@ describe('ArchitectureEngine', () => {
         expect(entryPoints[0].type).toBe('app');
       });
 
-      it('should detect server.ts entry point', () => {
+      it('should detect server.ts entry point', async () => {
         fs.writeFileSync(path.join(tmpDir, 'server.ts'), '');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const entryPoints = findEntryPoints(rootDir!);
@@ -252,10 +252,10 @@ describe('ArchitectureEngine', () => {
         expect(entryPoints[0].type).toBe('server');
       });
 
-      it('should detect cli.ts entry point', () => {
+      it('should detect cli.ts entry point', async () => {
         fs.writeFileSync(path.join(tmpDir, 'cli.ts'), '');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const entryPoints = findEntryPoints(rootDir!);
@@ -263,24 +263,24 @@ describe('ArchitectureEngine', () => {
         expect(entryPoints[0].type).toBe('cli');
       });
 
-      it('should detect multiple entry points', () => {
+      it('should detect multiple entry points', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), '');
         fs.writeFileSync(path.join(tmpDir, 'cli.ts'), '');
         fs.writeFileSync(path.join(tmpDir, 'server.ts'), '');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const entryPoints = findEntryPoints(rootDir!);
         expect(entryPoints).toHaveLength(3);
       });
 
-      it('should detect entry points in subdirectories', () => {
+      it('should detect entry points in subdirectories', async () => {
         fs.mkdirSync(path.join(tmpDir, 'src'));
         fs.writeFileSync(path.join(tmpDir, 'src', 'index.ts'), '');
         fs.writeFileSync(path.join(tmpDir, 'src', 'app.ts'), '');
 
-        const rootDir = scanDirectory(tmpDir);
+        const rootDir = await scanDirectory(tmpDir);
         expect(rootDir).not.toBeNull();
 
         const entryPoints = findEntryPoints(rootDir!);
@@ -289,8 +289,8 @@ describe('ArchitectureEngine', () => {
     });
 
     describe('Full folder structure analysis', () => {
-      it('should analyze empty repository', () => {
-        const structure = analyzeFolderStructure(tmpDir);
+      it('should analyze empty repository', async () => {
+        const structure = await analyzeFolderStructure(tmpDir);
 
         expect(structure.rootPath).toBe(tmpDir);
         expect(structure.totalFiles).toBe(0);
@@ -299,30 +299,30 @@ describe('ArchitectureEngine', () => {
         expect(structure.entryPoints).toHaveLength(0);
       });
 
-      it('should analyze repository with src structure', () => {
+      it('should analyze repository with src structure', async () => {
         fs.mkdirSync(path.join(tmpDir, 'src', 'modules'), { recursive: true });
         fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
         fs.writeFileSync(path.join(tmpDir, 'tsconfig.json'), '{}');
         fs.writeFileSync(path.join(tmpDir, 'src', 'index.ts'), '');
         fs.writeFileSync(path.join(tmpDir, 'src', 'modules', 'auth.ts'), '');
 
-        const structure = analyzeFolderStructure(tmpDir);
+        const structure = await analyzeFolderStructure(tmpDir);
 
         expect(structure.totalFiles).toBe(4);
         expect(structure.totalDirectories).toBe(3);
         expect(structure.entryPoints).toHaveLength(1);
       });
 
-      it('should calculate max depth correctly', () => {
+      it('should calculate max depth correctly', async () => {
         fs.mkdirSync(path.join(tmpDir, 'a', 'b', 'c', 'd'), { recursive: true });
         fs.writeFileSync(path.join(tmpDir, 'a', 'b', 'c', 'd', 'deep.ts'), '');
 
-        const structure = analyzeFolderStructure(tmpDir);
+        const structure = await analyzeFolderStructure(tmpDir);
 
         expect(structure.maxDepth).toBe(4);
       });
 
-      it('should analyze monorepo structure', () => {
+      it('should analyze monorepo structure', async () => {
         fs.mkdirSync(path.join(tmpDir, 'packages', 'core'), { recursive: true });
         fs.mkdirSync(path.join(tmpDir, 'packages', 'utils'), { recursive: true });
         fs.mkdirSync(path.join(tmpDir, 'apps', 'web'), { recursive: true });
@@ -337,7 +337,7 @@ describe('ArchitectureEngine', () => {
         fs.writeFileSync(path.join(tmpDir, 'apps', 'web', 'package.json'), '{}');
         fs.writeFileSync(path.join(tmpDir, 'apps', 'web', 'app.ts'), '');
 
-        const structure = analyzeFolderStructure(tmpDir);
+        const structure = await analyzeFolderStructure(tmpDir);
 
         expect(structure.moduleBoundaries.length).toBeGreaterThanOrEqual(2);
         expect(structure.entryPoints.length).toBeGreaterThanOrEqual(3);
@@ -345,12 +345,12 @@ describe('ArchitectureEngine', () => {
     });
 
     describe('ArchitectureEngine class', () => {
-      it('should provide full analysis', () => {
+      it('should provide full analysis', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), '');
         fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
 
         const engine = new ArchitectureEngine(tmpDir);
-        const result = engine.analyze();
+        const result = await engine.analyze();
 
         expect(result.folderStructure).toBeDefined();
         expect(result.moduleBoundaries).toBeDefined();
@@ -358,54 +358,54 @@ describe('ArchitectureEngine', () => {
         expect(result.summary.length).toBeGreaterThan(0);
       });
 
-      it('should provide folder structure', () => {
+      it('should provide folder structure', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), '');
 
         const engine = new ArchitectureEngine(tmpDir);
-        const structure = engine.getFolderStructure();
+        const structure = await engine.getFolderStructure();
 
         expect(structure.rootPath).toBe(tmpDir);
         expect(structure.totalFiles).toBe(1);
       });
 
-      it('should provide module boundaries', () => {
+      it('should provide module boundaries', async () => {
         fs.mkdirSync(path.join(tmpDir, 'packages', 'core'), { recursive: true });
         fs.writeFileSync(path.join(tmpDir, 'packages', 'core', 'package.json'), '{}');
 
         const engine = new ArchitectureEngine(tmpDir);
-        const boundaries = engine.getModuleBoundaries();
+        const boundaries = await engine.getModuleBoundaries();
 
         expect(boundaries).toHaveLength(1);
         expect(boundaries[0].name).toBe('core');
       });
 
-      it('should provide entry points', () => {
+      it('should provide entry points', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), '');
         fs.writeFileSync(path.join(tmpDir, 'cli.ts'), '');
 
         const engine = new ArchitectureEngine(tmpDir);
-        const entryPoints = engine.getEntryPoints();
+        const entryPoints = await engine.getEntryPoints();
 
         expect(entryPoints).toHaveLength(2);
       });
 
-      it('should provide directory tree', () => {
+      it('should provide directory tree', async () => {
         fs.mkdirSync(path.join(tmpDir, 'src'));
         fs.writeFileSync(path.join(tmpDir, 'src', 'index.ts'), '');
         fs.writeFileSync(path.join(tmpDir, 'package.json'), '{}');
 
         const engine = new ArchitectureEngine(tmpDir);
-        const tree = engine.getDirectoryTree();
+        const tree = await engine.getDirectoryTree();
 
         expect(tree.length).toBeGreaterThan(0);
         expect(tree[0]).toContain('.');
       });
 
-      it('should provide summary', () => {
+      it('should provide summary', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), '');
 
         const engine = new ArchitectureEngine(tmpDir);
-        const summary = engine.getSummary();
+        const summary = await engine.getSummary();
 
         expect(summary.length).toBeGreaterThan(0);
         expect(summary.some((s) => s.includes('Total files'))).toBe(true);
@@ -413,10 +413,10 @@ describe('ArchitectureEngine', () => {
     });
 
     describe('Summarizers', () => {
-      it('should summarize folder structure', () => {
+      it('should summarize folder structure', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), '');
 
-        const structure = analyzeFolderStructure(tmpDir);
+        const structure = await analyzeFolderStructure(tmpDir);
         const summary = summarizeFolderStructure(structure);
 
         expect(summary.some((s) => s.includes('Total files: 1'))).toBe(true);
@@ -428,11 +428,11 @@ describe('ArchitectureEngine', () => {
         expect(summary).toContain('No module boundaries detected');
       });
 
-      it('should summarize module boundaries', () => {
+      it('should summarize module boundaries', async () => {
         fs.mkdirSync(path.join(tmpDir, 'packages', 'core'), { recursive: true });
         fs.writeFileSync(path.join(tmpDir, 'packages', 'core', 'package.json'), '{}');
 
-        const structure = analyzeFolderStructure(tmpDir);
+        const structure = await analyzeFolderStructure(tmpDir);
         const summary = summarizeModuleBoundaries(structure.moduleBoundaries, tmpDir);
 
         expect(summary.some((s) => s.includes('Found 1 module boundary'))).toBe(true);
@@ -444,10 +444,10 @@ describe('ArchitectureEngine', () => {
         expect(summary).toContain('No entry points detected');
       });
 
-      it('should summarize entry points', () => {
+      it('should summarize entry points', async () => {
         fs.writeFileSync(path.join(tmpDir, 'index.ts'), '');
 
-        const structure = analyzeFolderStructure(tmpDir);
+        const structure = await analyzeFolderStructure(tmpDir);
         const summary = summarizeEntryPoints(structure.entryPoints, tmpDir);
 
         expect(summary.some((s) => s.includes('Found 1 entry point'))).toBe(true);
@@ -640,11 +640,11 @@ Run the tool.`,
         expect(docs.projectDescription).toContain('A test project');
       });
 
-      it('should include documentation in summary', () => {
+      it('should include documentation in summary', async () => {
         fs.writeFileSync(path.join(tmpDir, 'README.md'), '# Project');
 
         const engine = new ArchitectureEngine(tmpDir);
-        const summary = engine.getSummary();
+        const summary = await engine.getSummary();
 
         expect(summary.some((s) => s.includes('Documentation'))).toBe(true);
       });
@@ -803,12 +803,12 @@ Run the tool.`,
         expect(serviceMap.services.size).toBeGreaterThan(0);
       });
 
-      it('should include service relationships in summary', () => {
+      it('should include service relationships in summary', async () => {
         fs.mkdirSync(path.join(tmpDir, 'services'));
         fs.writeFileSync(path.join(tmpDir, 'services', 'auth.ts'), '');
 
         const engine = new ArchitectureEngine(tmpDir);
-        const summary = engine.getSummary();
+        const summary = await engine.getSummary();
 
         expect(summary.some((s) => s.includes('Service Relationships'))).toBe(true);
       });
@@ -1080,7 +1080,7 @@ Run the tool.`,
         expect(patterns.frameworks.length).toBeGreaterThan(0);
       });
 
-      it('should include patterns in summary', () => {
+      it('should include patterns in summary', async () => {
         fs.writeFileSync(
           path.join(tmpDir, 'package.json'),
           JSON.stringify({
@@ -1090,7 +1090,7 @@ Run the tool.`,
         );
 
         const engine = new ArchitectureEngine(tmpDir);
-        const summary = engine.getSummary();
+        const summary = await engine.getSummary();
 
         expect(summary.some((s) => s.includes('Frameworks and Patterns'))).toBe(true);
       });
