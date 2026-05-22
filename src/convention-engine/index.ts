@@ -8,6 +8,7 @@ import {
 import { parseTypeScriptConfig, summarizeTypeScriptConfig } from './typescript-config-parser.js';
 import { parsePackageJson, summarizePackageJsonConfig } from './package-json-parser.js';
 import { parseCIConfig, summarizeCIConfig } from './ci-config-parser.js';
+import { parseTestFrameworkConfig, summarizeTestFrameworkConfig } from './test-framework-parser.js';
 import type {
   EditorConfig,
   EditorConfigRule,
@@ -19,6 +20,7 @@ import type {
   PackageJsonConfig,
   CIConfig,
   CIWorkflow,
+  TestFrameworkConfig,
   ConventionSummary,
   ConventionEngineResult,
 } from './types.js';
@@ -37,6 +39,7 @@ export class ConventionEngine {
     const typeScriptConfig = parseTypeScriptConfig(this.repoPath);
     const packageJsonConfig = parsePackageJson(this.repoPath);
     const ciConfig = parseCIConfig(this.repoPath);
+    const testFrameworkConfig = parseTestFrameworkConfig(this.repoPath);
     const summaries: ConventionSummary[] = [];
 
     const editorConfigConventions = summarizeEditorConfig(editorConfig);
@@ -81,6 +84,13 @@ export class ConventionEngine {
       conventions: ciConventions,
     });
 
+    const testFrameworkConventions = summarizeTestFrameworkConfig(testFrameworkConfig);
+    summaries.push({
+      source: 'Test Framework',
+      category: 'test',
+      conventions: testFrameworkConventions,
+    });
+
     return {
       editorConfig,
       lintFormat: {
@@ -90,6 +100,7 @@ export class ConventionEngine {
       typeScript: typeScriptConfig,
       packageJson: packageJsonConfig,
       ci: ciConfig,
+      testFramework: testFrameworkConfig,
       summaries,
     };
   }
@@ -147,6 +158,15 @@ export class ConventionEngine {
     const ciConfig = parseCIConfig(this.repoPath);
     return summarizeCIConfig(ciConfig);
   }
+
+  getTestFrameworkConfig(): TestFrameworkConfig | null {
+    return parseTestFrameworkConfig(this.repoPath);
+  }
+
+  getTestConventions(): string[] {
+    const testFrameworkConfig = parseTestFrameworkConfig(this.repoPath);
+    return summarizeTestFrameworkConfig(testFrameworkConfig);
+  }
 }
 
 export { parseEditorConfig, summarizeEditorConfig } from './editorconfig-parser.js';
@@ -159,6 +179,7 @@ export {
 export { parseTypeScriptConfig, summarizeTypeScriptConfig } from './typescript-config-parser.js';
 export { parsePackageJson, summarizePackageJsonConfig } from './package-json-parser.js';
 export { parseCIConfig, summarizeCIConfig } from './ci-config-parser.js';
+export { parseTestFrameworkConfig, summarizeTestFrameworkConfig } from './test-framework-parser.js';
 export type {
   EditorConfig,
   EditorConfigRule,
@@ -170,6 +191,7 @@ export type {
   PackageJsonConfig,
   CIConfig,
   CIWorkflow,
+  TestFrameworkConfig,
   ConventionSummary,
   ConventionEngineResult,
 } from './types.js';
