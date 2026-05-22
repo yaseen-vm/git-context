@@ -19,3 +19,34 @@ export type {
   ConventionSummary,
   ConventionEngineResult,
 } from './convention-engine/index.js';
+
+export {
+  normalizeFilePath,
+  getRelativePath,
+  isSecretFile,
+  isGeneratedFile,
+  isLockFile,
+  shouldExcludeFile,
+  truncateContent,
+  formatTokenCount,
+  SUPPORTED_FORMATS,
+  REVIEW_FOCUSES,
+  SECRET_PATTERNS,
+  GENERATED_PATTERNS,
+  LOCK_FILE_PATTERNS,
+} from './utils/index.js';
+export type {
+  FileChange,
+  ReviewContext,
+  CommitInfo,
+  ConventionInfo,
+  ArchitectureInfo,
+  OutputFormat,
+  ReviewFocus,
+} from './utils/index.js';
+
+export { PromptBuilder } from './prompt-builder/index.js';
+export type { PromptBuilderOptions, PromptResult } from './prompt-builder/index.js';
+
+export { SecretFilter } from './secret-filter/index.js';
+export type { SecretFilterOptions, FilterResult } from './secret-filter/index.js';
