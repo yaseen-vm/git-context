@@ -11,15 +11,11 @@ import { parseCIConfig, summarizeCIConfig } from './ci-config-parser.js';
 import { parseTestFrameworkConfig, summarizeTestFrameworkConfig } from './test-framework-parser.js';
 import type {
   EditorConfig,
-  EditorConfigRule,
-  EditorConfigSection,
   ESLintConfig,
   PrettierConfig,
-  LintFormatConfig,
   TypeScriptConfig,
   PackageJsonConfig,
   CIConfig,
-  CIWorkflow,
   TestFrameworkConfig,
   ConventionSummary,
   ConventionEngineResult,

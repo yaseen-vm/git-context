@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import type { DirectoryInfo } from './types.js';
 
 export interface Service {
   name: string;
@@ -51,8 +50,6 @@ const SERVICE_INDICATORS: Record<string, Service['type']> = {
 };
 
 const IMPORT_PATTERN = /(?:import|require)\s+(?:.*\s+from\s+)?['"]([^'"]+)['"]/g;
-const EXPORT_PATTERN =
-  /export\s+(?:default\s+)?(?:class|function|const|let|var|interface|type)\s+(\w+)/g;
 
 function detectServiceType(dirName: string): Service['type'] {
   const lower = dirName.toLowerCase();
@@ -76,14 +73,14 @@ function extractImports(content: string): string[] {
 function resolveImportPath(
   importPath: string,
   currentFile: string,
-  repoPath: string,
+  _repoPath: string,
 ): string | null {
   if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
     return null;
   }
 
   const currentDir = path.dirname(currentFile);
-  let resolved = path.resolve(currentDir, importPath);
+  const resolved = path.resolve(currentDir, importPath);
 
   const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
   if (!path.extname(resolved)) {
