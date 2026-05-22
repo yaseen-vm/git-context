@@ -127,7 +127,6 @@ export async function scanDirectory(
                 name: entry.name,
                 extension: path.extname(entry.name).toLowerCase(),
                 size: fileStats.size,
-                isDirectory: false,
               });
             })
             .catch(() => {

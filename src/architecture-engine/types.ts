@@ -3,8 +3,6 @@ export interface FileInfo {
   name: string;
   extension: string;
   size: number;
-  isDirectory: boolean;
-  children?: FileInfo[];
 }
 
 export interface DirectoryInfo {
