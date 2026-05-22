@@ -3,7 +3,16 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { SecretFilter } from '../../src/secret-filter/index.js';
-import { isSecretFile, shouldExcludeFile, SECRET_PATTERNS } from '../../src/utils/index.js';
+import {
+  isSecretFile,
+  shouldExcludeFile,
+  SECRET_PATTERNS,
+  isBinaryFile,
+  isVendorFile,
+  isGeneratedFile,
+  isLockFile,
+  BINARY_EXTENSIONS,
+} from '../../src/utils/index.js';
 
 describe('isSecretFile', () => {
   it('detects .env files', () => {
@@ -199,6 +208,114 @@ describe('SecretFilter gitignore handling', () => {
   });
 });
 
+describe('isBinaryFile', () => {
+  it('detects image files', () => {
+    expect(isBinaryFile('logo.png')).toBe(true);
+    expect(isBinaryFile('photo.jpg')).toBe(true);
+    expect(isBinaryFile('icon.ico')).toBe(true);
+    expect(isBinaryFile('animation.gif')).toBe(true);
+  });
+
+  it('detects compiled output files', () => {
+    expect(isBinaryFile('App.class')).toBe(true);
+    expect(isBinaryFile('module.pyc')).toBe(true);
+    expect(isBinaryFile('app.wasm')).toBe(true);
+  });
+
+  it('detects archive files', () => {
+    expect(isBinaryFile('release.zip')).toBe(true);
+    expect(isBinaryFile('bundle.tar.gz')).toBe(true);
+  });
+
+  it('detects native binaries', () => {
+    expect(isBinaryFile('app.exe')).toBe(true);
+    expect(isBinaryFile('lib.dll')).toBe(true);
+    expect(isBinaryFile('lib.so')).toBe(true);
+  });
+
+  it('detects font files', () => {
+    expect(isBinaryFile('font.ttf')).toBe(true);
+    expect(isBinaryFile('font.woff2')).toBe(true);
+  });
+
+  it('allows source and text files', () => {
+    expect(isBinaryFile('src/app.ts')).toBe(false);
+    expect(isBinaryFile('README.md')).toBe(false);
+    expect(isBinaryFile('config.json')).toBe(false);
+    expect(isBinaryFile('styles.css')).toBe(false);
+  });
+
+  it('is case-insensitive for extensions', () => {
+    expect(isBinaryFile('IMAGE.PNG')).toBe(true);
+    expect(isBinaryFile('Library.DLL')).toBe(true);
+  });
+
+  it('BINARY_EXTENSIONS contains expected entries', () => {
+    expect(BINARY_EXTENSIONS.has('.png')).toBe(true);
+    expect(BINARY_EXTENSIONS.has('.exe')).toBe(true);
+    expect(BINARY_EXTENSIONS.has('.wasm')).toBe(true);
+  });
+});
+
+describe('isVendorFile', () => {
+  it('detects vendor directories', () => {
+    expect(isVendorFile('vendor/github.com/pkg/lib.go')).toBe(true);
+    expect(isVendorFile('third_party/openssl/src/ssl.c')).toBe(true);
+    expect(isVendorFile('extern/zlib/zlib.h')).toBe(true);
+  });
+
+  it('allows non-vendor paths', () => {
+    expect(isVendorFile('src/vendor-utils.ts')).toBe(false);
+    expect(isVendorFile('services/payment.ts')).toBe(false);
+  });
+});
+
+describe('isGeneratedFile', () => {
+  it('detects build output directories', () => {
+    expect(isGeneratedFile('dist/bundle.js')).toBe(true);
+    expect(isGeneratedFile('build/index.html')).toBe(true);
+    expect(isGeneratedFile('coverage/lcov.info')).toBe(true);
+    expect(isGeneratedFile('out/release/app')).toBe(true);
+  });
+
+  it('detects framework caches', () => {
+    expect(isGeneratedFile('.next/server/app.js')).toBe(true);
+    expect(isGeneratedFile('.nuxt/dist/client.js')).toBe(true);
+    expect(isGeneratedFile('.cache/babel-loader/hash')).toBe(true);
+  });
+
+  it('detects node_modules', () => {
+    expect(isGeneratedFile('node_modules/lodash/index.js')).toBe(true);
+  });
+
+  it('detects compiled Python files', () => {
+    expect(isGeneratedFile('module.pyc')).toBe(true);
+    expect(isGeneratedFile('__pycache__/main.cpython-311.pyc')).toBe(true);
+  });
+
+  it('allows source files', () => {
+    expect(isGeneratedFile('src/app.ts')).toBe(false);
+    expect(isGeneratedFile('scripts/build.sh')).toBe(false);
+  });
+});
+
+describe('isLockFile', () => {
+  it('detects all common lock files', () => {
+    expect(isLockFile('package-lock.json')).toBe(true);
+    expect(isLockFile('yarn.lock')).toBe(true);
+    expect(isLockFile('pnpm-lock.yaml')).toBe(true);
+    expect(isLockFile('Gemfile.lock')).toBe(true);
+    expect(isLockFile('composer.lock')).toBe(true);
+    expect(isLockFile('poetry.lock')).toBe(true);
+    expect(isLockFile('Cargo.lock')).toBe(true);
+    expect(isLockFile('Pipfile.lock')).toBe(true);
+  });
+
+  it('allows regular files with lock in the name', () => {
+    expect(isLockFile('src/lock-manager.ts')).toBe(false);
+  });
+});
+
 describe('shouldExcludeFile', () => {
   it('excludes secret files', () => {
     expect(shouldExcludeFile('.env')).toBe(true);
@@ -212,10 +329,21 @@ describe('shouldExcludeFile', () => {
     expect(shouldExcludeFile('.next/server/pages.js')).toBe(true);
   });
 
+  it('excludes vendor directories', () => {
+    expect(shouldExcludeFile('vendor/pkg/lib.go')).toBe(true);
+    expect(shouldExcludeFile('third_party/lib/src.c')).toBe(true);
+  });
+
   it('excludes lock files', () => {
     expect(shouldExcludeFile('package-lock.json')).toBe(true);
     expect(shouldExcludeFile('yarn.lock')).toBe(true);
     expect(shouldExcludeFile('pnpm-lock.yaml')).toBe(true);
+  });
+
+  it('excludes binary files', () => {
+    expect(shouldExcludeFile('assets/logo.png')).toBe(true);
+    expect(shouldExcludeFile('release/app.exe')).toBe(true);
+    expect(shouldExcludeFile('fonts/inter.woff2')).toBe(true);
   });
 
   it('allows regular source files', () => {

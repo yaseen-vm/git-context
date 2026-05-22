@@ -120,12 +120,23 @@ export const SECRET_PATTERNS = [
 
 export const GENERATED_PATTERNS = [
   /node_modules/,
-  /\.git/,
-  /dist/,
-  /build/,
-  /coverage/,
-  /\.next/,
-  /\.nuxt/,
+  /\.git\//,
+  /(^|\/)dist\//,
+  /(^|\/)build\//,
+  /(^|\/)coverage\//,
+  /\.next\//,
+  /\.nuxt\//,
+  /(^|\/)out\//,
+  /(^|\/)\.cache\//,
+  /(^|\/)__pycache__\//,
+  /\.pyc$/,
+  /\.class$/,
+] as const;
+
+export const VENDOR_PATTERNS = [
+  /(^|\/)vendor\//,
+  /(^|\/)third_party\//,
+  /(^|\/)extern\//,
 ] as const;
 
 export const LOCK_FILE_PATTERNS = [
@@ -135,7 +146,23 @@ export const LOCK_FILE_PATTERNS = [
   /composer\.lock$/,
   /Gemfile\.lock$/,
   /poetry\.lock$/,
+  /cargo\.lock$/i,
+  /pipfile\.lock$/i,
 ] as const;
+
+export const BINARY_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.svg',
+  '.tiff', '.tif', '.avif', '.heic',
+  '.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv',
+  '.mp3', '.wav', '.ogg', '.flac', '.aac',
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.zip', '.tar', '.gz', '.bz2', '.xz', '.7z', '.rar',
+  '.exe', '.dll', '.so', '.dylib', '.lib', '.a',
+  '.wasm', '.bin', '.dat', '.db', '.sqlite', '.sqlite3',
+  '.ttf', '.otf', '.woff', '.woff2', '.eot',
+  '.jar', '.war', '.ear', '.class',
+  '.pyc', '.pyo', '.pyd',
+]);
 
 export function normalizeFilePath(filePath: string): string {
   return filePath.replace(/\\/g, '/');
@@ -153,12 +180,27 @@ export function isGeneratedFile(filePath: string): boolean {
   return GENERATED_PATTERNS.some((pattern) => pattern.test(filePath));
 }
 
+export function isVendorFile(filePath: string): boolean {
+  return VENDOR_PATTERNS.some((pattern) => pattern.test(filePath));
+}
+
 export function isLockFile(filePath: string): boolean {
   return LOCK_FILE_PATTERNS.some((pattern) => pattern.test(filePath));
 }
 
+export function isBinaryFile(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return BINARY_EXTENSIONS.has(ext);
+}
+
 export function shouldExcludeFile(filePath: string): boolean {
-  return isSecretFile(filePath) || isGeneratedFile(filePath) || isLockFile(filePath);
+  return (
+    isSecretFile(filePath) ||
+    isGeneratedFile(filePath) ||
+    isVendorFile(filePath) ||
+    isLockFile(filePath) ||
+    isBinaryFile(filePath)
+  );
 }
 
 export function truncateContent(content: string, maxLength: number = 50000): string {
