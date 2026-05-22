@@ -128,6 +128,100 @@ describe('PromptBuilder.buildPrompt — token budget', () => {
   });
 });
 
+describe('PromptBuilder — markdown format', () => {
+  it('includes # Code Review Context heading', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toMatch(/^# Code Review Context/);
+    expect(result.format).toBe('markdown');
+  });
+
+  it('lists changed files with status and line counts', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Changed Files');
+    expect(result.content).toContain('src/auth/login.ts');
+    expect(result.content).toContain('modified');
+    expect(result.content).toContain('+20');
+    expect(result.content).toContain('-5');
+  });
+
+  it('lists related files', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Related Files');
+    expect(result.content).toContain('src/auth/middleware.ts');
+    expect(result.content).toContain('tests/auth/login.test.ts');
+  });
+
+  it('includes git history with truncated hash', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Recent History');
+    expect(result.content).toContain('abc1234');
+    expect(result.content).toContain('Fix token validation');
+    expect(result.content).toContain('alice');
+  });
+
+  it('caps history at 10 commits', async () => {
+    const manyCommits = Array.from({ length: 15 }, (_, i) => ({
+      hash: `hash${i}`,
+      date: '2026-01-01',
+      message: `commit ${i}`,
+      author: 'dev',
+    }));
+    const ctx = { ...baseContext, history: manyCommits };
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(ctx);
+    expect((result.content.match(/- hash/g) ?? []).length).toBe(10);
+  });
+
+  it('includes team conventions', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Team Conventions');
+    expect(result.content).toContain('TypeScript strict mode');
+    expect(result.content).toContain('ESLint configured');
+    expect(result.content).toContain('Prettier configured');
+  });
+
+  it('includes architecture notes with frameworks and patterns', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Architecture Notes');
+    expect(result.content).toContain('express');
+    expect(result.content).toContain('repository pattern');
+    expect(result.content).toContain('JWT auth');
+  });
+
+  it('includes ## Task section', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Task');
+    expect(result.content).toMatch(/comprehensive/i);
+  });
+
+  it('shows Review Focus line when focus is set', async () => {
+    const builder = new PromptBuilder({ format: 'markdown', focus: 'security' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('**Review Focus:** security');
+  });
+
+  it('omits empty sections gracefully', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(emptyContext);
+    expect(result.content).not.toContain('## Changed Files');
+    expect(result.content).not.toContain('## Related Files');
+    expect(result.content).not.toContain('## Recent History');
+  });
+
+  it('returns tokenEstimate > 0', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.tokenEstimate).toBeGreaterThan(0);
+  });
+});
+
 describe('PromptBuilder template system — sectionOrder', () => {
   it('respects custom section order', async () => {
     const template: PromptTemplate = {
