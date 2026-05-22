@@ -55,5 +55,10 @@ export type { PromptBuilderOptions, PromptResult, PromptTemplate } from './promp
 export { SecretFilter } from './secret-filter/index.js';
 export type { SecretFilterOptions, FilterResult } from './secret-filter/index.js';
 
-export { MonorepoDetector } from './monorepo/index.js';
-export type { MonorepoInfo, MonorepoTool, WorkspacePackage } from './monorepo/index.js';
+export { MonorepoDetector, WorkspaceScope } from './monorepo/index.js';
+export type {
+  MonorepoInfo,
+  MonorepoTool,
+  WorkspacePackage,
+  ScopeResult,
+} from './monorepo/index.js';
