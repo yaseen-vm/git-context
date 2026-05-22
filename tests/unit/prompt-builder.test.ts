@@ -222,6 +222,83 @@ describe('PromptBuilder — markdown format', () => {
   });
 });
 
+describe('PromptBuilder — json format', () => {
+  it('returns valid JSON string', async () => {
+    const builder = new PromptBuilder({ format: 'json' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.format).toBe('json');
+    expect(() => JSON.parse(result.content)).not.toThrow();
+  });
+
+  it('has consistent top-level schema keys', async () => {
+    const builder = new PromptBuilder({ format: 'json' });
+    const result = await builder.buildPrompt(baseContext);
+    const parsed = JSON.parse(result.content);
+    expect(parsed).toHaveProperty('task', 'code-review');
+    expect(parsed).toHaveProperty('focus');
+    expect(parsed).toHaveProperty('context');
+    expect(parsed).toHaveProperty('instructions');
+  });
+
+  it('context includes all required fields', async () => {
+    const builder = new PromptBuilder({ format: 'json' });
+    const result = await builder.buildPrompt(baseContext);
+    const { context } = JSON.parse(result.content);
+    expect(context).toHaveProperty('changes');
+    expect(context).toHaveProperty('relatedFiles');
+    expect(context).toHaveProperty('history');
+    expect(context).toHaveProperty('conventions');
+    expect(context).toHaveProperty('architecture');
+  });
+
+  it('architecture field has frameworks, patterns, structure', async () => {
+    const builder = new PromptBuilder({ format: 'json' });
+    const result = await builder.buildPrompt(baseContext);
+    const { context } = JSON.parse(result.content);
+    expect(context.architecture).toHaveProperty('frameworks');
+    expect(context.architecture).toHaveProperty('patterns');
+    expect(context.architecture).toHaveProperty('structure');
+  });
+
+  it('defaults focus to "general" when not specified', async () => {
+    const builder = new PromptBuilder({ format: 'json' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(JSON.parse(result.content).focus).toBe('general');
+  });
+
+  it('uses provided focus', async () => {
+    const builder = new PromptBuilder({ format: 'json', focus: 'performance' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(JSON.parse(result.content).focus).toBe('performance');
+  });
+
+  it('caps history at 10 commits', async () => {
+    const manyCommits = Array.from({ length: 15 }, (_, i) => ({
+      hash: `hash${i}`, date: '2026-01-01', message: `commit ${i}`, author: 'dev',
+    }));
+    const ctx = { ...baseContext, history: manyCommits };
+    const builder = new PromptBuilder({ format: 'json' });
+    const result = await builder.buildPrompt(ctx);
+    expect(JSON.parse(result.content).context.history).toHaveLength(10);
+  });
+
+  it('serialises FileChange objects correctly', async () => {
+    const builder = new PromptBuilder({ format: 'json' });
+    const result = await builder.buildPrompt(baseContext);
+    const [first] = JSON.parse(result.content).context.changes;
+    expect(first.path).toBe('src/auth/login.ts');
+    expect(first.status).toBe('modified');
+    expect(first.additions).toBe(20);
+    expect(first.deletions).toBe(5);
+  });
+
+  it('returns tokenEstimate > 0', async () => {
+    const builder = new PromptBuilder({ format: 'json' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.tokenEstimate).toBeGreaterThan(0);
+  });
+});
+
 describe('PromptBuilder template system — sectionOrder', () => {
   it('respects custom section order', async () => {
     const template: PromptTemplate = {
