@@ -22,6 +22,10 @@ import {
   summarizePackageJsonConfig,
 } from '../../src/convention-engine/package-json-parser.js';
 import { parseCIConfig, summarizeCIConfig } from '../../src/convention-engine/ci-config-parser.js';
+import {
+  parseTestFrameworkConfig,
+  summarizeTestFrameworkConfig,
+} from '../../src/convention-engine/test-framework-parser.js';
 
 describe('ConventionEngine', () => {
   let tmpDir: string;
@@ -1227,6 +1231,405 @@ jobs:
         const result = engine.analyze();
 
         expect(result.ci).toBeNull();
+      });
+    });
+  });
+
+  describe('Issue #20: Test framework parsing', () => {
+    describe('Test framework config parsing', () => {
+      it('should return null when no test config exists', () => {
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).toBeNull();
+      });
+
+      it('should detect Vitest from package.json', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              '@vitest/coverage-v8': '^1.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBe('Vitest');
+        expect(config!.hasCoverage).toBe(true);
+        expect(config!.coverageProvider).toBe('v8');
+        expect(config!.hasTypeScriptSupport).toBe(true);
+      });
+
+      it('should detect Jest from package.json', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              jest: '^29.0.0',
+              'ts-jest': '^29.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBe('Jest');
+        expect(config!.hasTypeScriptSupport).toBe(true);
+      });
+
+      it('should detect Mocha from package.json', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              mocha: '^10.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBe('Mocha');
+      });
+
+      it('should detect React Testing Library', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              '@testing-library/react': '^14.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasReactTestingLibrary).toBe(true);
+      });
+
+      it('should detect Cypress for E2E testing', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              cypress: '^13.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasE2E).toBe(true);
+        expect(config!.e2eFramework).toBe('Cypress');
+      });
+
+      it('should detect Playwright for E2E testing', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              '@playwright/test': '^1.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasE2E).toBe(true);
+        expect(config!.e2eFramework).toBe('Playwright');
+      });
+
+      it('should parse vitest.config.ts', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'vitest.config.ts'),
+          `import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['tests/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+    },
+  },
+});`,
+        );
+
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBe('Vitest');
+        expect(config!.configFile).toBe('vitest.config.ts');
+      });
+
+      it('should parse jest.config.js', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'jest.config.js'),
+          `module.exports = {
+  testMatch: ['**/*.test.ts'],
+  setupFilesAfterFramework: ['./jest.setup.js'],
+};`,
+        );
+
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              jest: '^29.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBe('Jest');
+        expect(config!.configFile).toBe('jest.config.js');
+      });
+
+      it('should parse .mocharc.yml', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.mocharc.yml'),
+          `spec: 'test/**/*.spec.ts'
+timeout: 5000`,
+        );
+
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              mocha: '^10.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBe('Mocha');
+        expect(config!.configFile).toBe('.mocharc.yml');
+      });
+
+      it('should detect coverage from nyc config', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.nycrc'),
+          JSON.stringify({
+            extends: '@istanbuljs/nyc-config-typescript',
+            include: ['src/**/*.ts'],
+          }),
+        );
+
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              mocha: '^10.0.0',
+              nyc: '^15.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasCoverage).toBe(true);
+        expect(config!.coverageProvider).toBe('nyc');
+      });
+
+      it('should detect E2E config files', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'cypress.config.ts'),
+          `import { defineConfig } from 'cypress';
+
+export default defineConfig({
+  e2e: {
+    baseUrl: 'http://localhost:3000',
+  },
+});`,
+        );
+
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              cypress: '^13.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasE2E).toBe(true);
+        expect(config!.e2eFramework).toBe('Cypress');
+      });
+    });
+
+    describe('Test framework summarization', () => {
+      it('should summarize Vitest conventions', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              '@vitest/coverage-v8': '^1.0.0',
+              '@testing-library/react': '^14.0.0',
+              cypress: '^13.0.0',
+            },
+          }),
+        );
+
+        const config = parseTestFrameworkConfig(tmpDir);
+        const summary = summarizeTestFrameworkConfig(config);
+
+        expect(summary).toContain('Test framework: Vitest');
+        expect(summary).toContain('Coverage enabled (v8)');
+        expect(summary).toContain('TypeScript test support enabled');
+        expect(summary).toContain('React Testing Library configured');
+        expect(summary).toContain('E2E testing: Cypress');
+      });
+
+      it('should handle missing test config in summary', () => {
+        const summary = summarizeTestFrameworkConfig(null);
+        expect(summary).toContain('No test framework configuration found');
+      });
+    });
+
+    describe('ConventionEngine test framework integration', () => {
+      it('should include test framework config in analyze result', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              '@vitest/coverage-v8': '^1.0.0',
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const result = engine.analyze();
+
+        expect(result.testFramework).not.toBeNull();
+        expect(result.testFramework!.framework).toBe('Vitest');
+        expect(result.testFramework!.hasCoverage).toBe(true);
+
+        const testSummary = result.summaries.find((s) => s.source === 'Test Framework');
+        expect(testSummary).toBeDefined();
+        expect(testSummary!.category).toBe('test');
+        expect(testSummary!.conventions).toContain('Test framework: Vitest');
+      });
+
+      it('should provide getTestFrameworkConfig shortcut', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              jest: '^29.0.0',
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const config = engine.getTestFrameworkConfig();
+
+        expect(config).not.toBeNull();
+        expect(config!.framework).toBe('Jest');
+      });
+
+      it('should provide getTestConventions shortcut', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              '@testing-library/react': '^14.0.0',
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const conventions = engine.getTestConventions();
+
+        expect(conventions).toContain('Test framework: Vitest');
+        expect(conventions).toContain('React Testing Library configured');
+      });
+
+      it('should handle no test framework gracefully', () => {
+        const engine = new ConventionEngine(tmpDir);
+        const result = engine.analyze();
+
+        expect(result.testFramework).toBeNull();
+      });
+
+      it('should detect complete test setup', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'vitest.config.ts'),
+          `import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    include: ['tests/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+    },
+  },
+});`,
+        );
+
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({
+            name: 'my-app',
+            devDependencies: {
+              vitest: '^1.0.0',
+              '@vitest/coverage-v8': '^1.0.0',
+              '@testing-library/react': '^14.0.0',
+              '@testing-library/jest-dom': '^6.0.0',
+              cypress: '^13.0.0',
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const result = engine.analyze();
+
+        expect(result.testFramework).not.toBeNull();
+        expect(result.testFramework!.framework).toBe('Vitest');
+        expect(result.testFramework!.configFile).toBe('vitest.config.ts');
+        expect(result.testFramework!.hasCoverage).toBe(true);
+        expect(result.testFramework!.coverageProvider).toBe('v8');
+        expect(result.testFramework!.hasTypeScriptSupport).toBe(true);
+        expect(result.testFramework!.hasReactTestingLibrary).toBe(true);
+        expect(result.testFramework!.hasE2E).toBe(true);
+        expect(result.testFramework!.e2eFramework).toBe('Cypress');
       });
     });
   });

@@ -15,6 +15,7 @@ export type {
   PackageJsonConfig,
   CIConfig,
   CIWorkflow,
+  TestFrameworkConfig,
   ConventionSummary,
   ConventionEngineResult,
 } from './convention-engine/index.js';

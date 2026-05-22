@@ -101,6 +101,21 @@ export interface CIConfig {
   hasGitLabCI: boolean;
 }
 
+export interface TestFrameworkConfig {
+  framework: string | null;
+  configFile: string | null;
+  configFiles: string[];
+  hasCoverage: boolean;
+  coverageProvider: string | null;
+  testPattern: string | null;
+  testPathPattern: string | null;
+  setupFiles: string[];
+  hasTypeScriptSupport: boolean;
+  hasReactTestingLibrary: boolean;
+  hasE2E: boolean;
+  e2eFramework: string | null;
+}
+
 export interface ConventionSummary {
   source: string;
   category: 'formatting' | 'lint' | 'typescript' | 'package' | 'ci' | 'test';
@@ -113,5 +128,6 @@ export interface ConventionEngineResult {
   typeScript: TypeScriptConfig | null;
   packageJson: PackageJsonConfig | null;
   ci: CIConfig | null;
+  testFramework: TestFrameworkConfig | null;
   summaries: ConventionSummary[];
 }
