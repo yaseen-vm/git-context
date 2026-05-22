@@ -1,5 +1,7 @@
 import { GitEngine, GitDiff } from '../../git-engine/index.js';
 import { PromptBuilder, PromptBuilderOptions } from '../../prompt-builder/index.js';
+import { ConventionEngine } from '../../convention-engine/index.js';
+import { DependencyAnalyzer } from '../../dependency-analyzer/index.js';
 import {
   OutputFormat,
   ReviewFocus,
@@ -153,29 +155,44 @@ async function buildReviewContext(
     deletions: file.deletions,
   }));
 
-  const relatedFiles: string[] = [];
-
+  const history: ReviewContext['history'] = [];
   if (options.history !== false) {
-    const history = [];
     for (const file of result.diff.files.slice(0, 5)) {
       const commits = await gitEngine.getRecentCommits(file.path, 3);
       history.push(...commits);
     }
+  }
 
-    return {
-      changes,
-      relatedFiles,
-      history,
-      conventions: {},
-      architecture: { structure: [], frameworks: [], patterns: [] },
+  let relatedFiles: string[] = [];
+  if (options.related !== false) {
+    const analyzer = new DependencyAnalyzer(process.cwd());
+    const filePaths = result.diff.files.map((f) => f.path);
+    analyzer.analyzeFiles(filePaths);
+    relatedFiles = analyzer.findAllRelatedFiles(filePaths).map((r) => r.path);
+  }
+
+  let conventions: ReviewContext['conventions'] = {};
+  if (options.conventions !== false) {
+    const engine = new ConventionEngine(process.cwd());
+    const r = engine.analyze();
+    const asRecord = (v: unknown): Record<string, unknown> | undefined =>
+      v == null ? undefined : (v as Record<string, unknown>);
+    conventions = {
+      editorConfig: asRecord(r.editorConfig),
+      eslint: asRecord(r.lintFormat.eslint),
+      prettier: asRecord(r.lintFormat.prettier),
+      typescript: asRecord(r.typeScript),
+      packageJson: asRecord(r.packageJson),
+      ci: asRecord(r.ci),
+      testFramework: asRecord(r.testFramework),
     };
   }
 
   return {
     changes,
     relatedFiles,
-    history: [],
-    conventions: {},
+    history,
+    conventions,
     architecture: { structure: [], frameworks: [], patterns: [] },
   };
 }
