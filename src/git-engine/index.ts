@@ -220,7 +220,7 @@ export class GitEngine {
           status = 'added';
         } else if (file.deleted) {
           status = 'deleted';
-        } else if (file.rename) {
+        } else if (file.from && file.to && file.from !== file.to) {
           status = 'renamed';
         }
 
