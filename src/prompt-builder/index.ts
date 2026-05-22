@@ -35,6 +35,15 @@ const DEFAULT_SECTION_ORDER = [
   'task',
 ];
 
+// Focus-specific section orders surface the most relevant context first.
+const FOCUS_SECTION_ORDERS: Record<ReviewFocus, string[]> = {
+  security: ['changed-files', 'related-files', 'conventions', 'history', 'architecture', 'task'],
+  performance: ['changed-files', 'related-files', 'architecture', 'history', 'conventions', 'task'],
+  architecture: ['architecture', 'changed-files', 'related-files', 'conventions', 'history', 'task'],
+  bug: ['changed-files', 'history', 'related-files', 'conventions', 'architecture', 'task'],
+  refactor: ['changed-files', 'related-files', 'conventions', 'architecture', 'history', 'task'],
+};
+
 const DEFAULT_TASK_DESCRIPTIONS: Record<ReviewFocus | 'general', string> = {
   security:
     'Identify security vulnerabilities, potential exploits, and security best practices violations. Look for injection risks, authentication issues, data exposure, and other security concerns.',
@@ -100,7 +109,9 @@ export class PromptBuilder {
   }
 
   private getSectionOrder(): string[] {
-    return this.template.sectionOrder ?? DEFAULT_SECTION_ORDER;
+    if (this.template.sectionOrder) return this.template.sectionOrder;
+    const focus = this.options.focus;
+    return focus ? FOCUS_SECTION_ORDERS[focus] : DEFAULT_SECTION_ORDER;
   }
 
   private buildMarkdownOutput(context: ReviewContext, focus?: ReviewFocus): string {

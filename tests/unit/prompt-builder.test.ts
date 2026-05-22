@@ -380,6 +380,71 @@ describe('PromptBuilder — prompt format', () => {
   });
 });
 
+describe('PromptBuilder — review focus modes', () => {
+  const focuses = ['security', 'performance', 'architecture', 'bug', 'refactor'] as const;
+
+  for (const focus of focuses) {
+    it(`renders correct task description for focus: ${focus}`, async () => {
+      const builder = new PromptBuilder({ format: 'markdown', focus });
+      const result = await builder.buildPrompt(baseContext);
+      const desc = builder.getTaskDescription(focus);
+      expect(result.content).toContain(desc);
+    });
+
+    it(`includes focus line in markdown for ${focus}`, async () => {
+      const builder = new PromptBuilder({ format: 'markdown', focus });
+      const result = await builder.buildPrompt(baseContext);
+      expect(result.content).toContain(`**Review Focus:** ${focus}`);
+    });
+
+    it(`json output sets focus field to ${focus}`, async () => {
+      const builder = new PromptBuilder({ format: 'json', focus });
+      const result = await builder.buildPrompt(baseContext);
+      expect(JSON.parse(result.content).focus).toBe(focus);
+    });
+
+    it(`prompt output emphasises ${focus} focus`, async () => {
+      const builder = new PromptBuilder({ format: 'prompt', focus });
+      const result = await builder.buildPrompt(baseContext);
+      expect(result.content).toContain(`**${focus}**`);
+    });
+  }
+
+  it('architecture focus surfaces Architecture Notes before Changed Files', async () => {
+    const builder = new PromptBuilder({ format: 'markdown', focus: 'architecture' });
+    const result = await builder.buildPrompt(baseContext);
+    const archIdx = result.content.indexOf('## Architecture Notes');
+    const changedIdx = result.content.indexOf('## Changed Files');
+    expect(archIdx).toBeLessThan(changedIdx);
+  });
+
+  it('security focus surfaces conventions before history', async () => {
+    const builder = new PromptBuilder({ format: 'markdown', focus: 'security' });
+    const result = await builder.buildPrompt(baseContext);
+    const convIdx = result.content.indexOf('## Team Conventions');
+    const historyIdx = result.content.indexOf('## Recent History');
+    expect(convIdx).toBeLessThan(historyIdx);
+  });
+
+  it('bug focus surfaces history before conventions', async () => {
+    const builder = new PromptBuilder({ format: 'markdown', focus: 'bug' });
+    const result = await builder.buildPrompt(baseContext);
+    const historyIdx = result.content.indexOf('## Recent History');
+    const convIdx = result.content.indexOf('## Team Conventions');
+    expect(historyIdx).toBeLessThan(convIdx);
+  });
+
+  it('all focuses still include all sections', async () => {
+    for (const focus of focuses) {
+      const builder = new PromptBuilder({ format: 'markdown', focus });
+      const result = await builder.buildPrompt(baseContext);
+      expect(result.content).toContain('## Changed Files');
+      expect(result.content).toContain('## Team Conventions');
+      expect(result.content).toContain('## Task');
+    }
+  });
+});
+
 describe('PromptBuilder template system — sectionOrder', () => {
   it('respects custom section order', async () => {
     const template: PromptTemplate = {
