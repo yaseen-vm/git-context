@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import ignore, { Ignore } from 'ignore';
 import type {
   FileInfo,
   DirectoryInfo,
@@ -46,6 +47,25 @@ function shouldIgnoreDir(dirName: string): boolean {
   return IGNORE_DIRS.has(dirName) || dirName.startsWith('.');
 }
 
+function loadIgnoreRules(repoPath: string): Ignore {
+  const ig = ignore();
+
+  const ignoreFiles = ['.gitignore', '.ignore'];
+  for (const ignoreFile of ignoreFiles) {
+    const ignorePath = path.join(repoPath, ignoreFile);
+    try {
+      if (fs.existsSync(ignorePath)) {
+        const content = fs.readFileSync(ignorePath, 'utf-8');
+        ig.add(content);
+      }
+    } catch {
+      // Skip files we can't read
+    }
+  }
+
+  return ig;
+}
+
 function getEntryPointType(name: string): EntryPoint['type'] | null {
   if (name.startsWith('index.')) return 'index';
   if (name.startsWith('main.')) return 'main';
@@ -59,6 +79,8 @@ export function scanDirectory(
   dirPath: string,
   maxDepth: number = 10,
   currentDepth: number = 0,
+  ignoreFilter?: Ignore,
+  rootPath?: string,
 ): DirectoryInfo | null {
   if (currentDepth > maxDepth) return null;
 
@@ -69,18 +91,33 @@ export function scanDirectory(
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
     const files: FileInfo[] = [];
     const subdirectories: DirectoryInfo[] = [];
+    const basePath = rootPath || dirPath;
 
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
+      const relativePath = path.relative(basePath, fullPath).replace(/\\/g, '/');
 
       if (entry.isDirectory()) {
         if (!shouldIgnoreDir(entry.name)) {
-          const subDir = scanDirectory(fullPath, maxDepth, currentDepth + 1);
+          const dirRelativePath = relativePath + '/';
+          if (ignoreFilter && ignoreFilter.ignores(dirRelativePath)) {
+            continue;
+          }
+          const subDir = scanDirectory(
+            fullPath,
+            maxDepth,
+            currentDepth + 1,
+            ignoreFilter,
+            basePath,
+          );
           if (subDir) {
             subdirectories.push(subDir);
           }
         }
       } else {
+        if (ignoreFilter && ignoreFilter.ignores(relativePath)) {
+          continue;
+        }
         try {
           const fileStats = fs.statSync(fullPath);
           files.push({
@@ -204,7 +241,8 @@ function calculateStats(dirInfo: DirectoryInfo): {
 }
 
 export function analyzeFolderStructure(repoPath: string): FolderStructure {
-  const rootDir = scanDirectory(repoPath);
+  const ignoreFilter = loadIgnoreRules(repoPath);
+  const rootDir = scanDirectory(repoPath, 10, 0, ignoreFilter, repoPath);
 
   if (!rootDir) {
     return {
