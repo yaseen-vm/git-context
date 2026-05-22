@@ -1,4 +1,12 @@
 import { GitEngine, GitDiff } from '../../git-engine/index.js';
+import { PromptBuilder, PromptBuilderOptions } from '../../prompt-builder/index.js';
+import {
+  OutputFormat,
+  ReviewFocus,
+  ReviewContext,
+  SUPPORTED_FORMATS,
+  REVIEW_FOCUSES,
+} from '../../utils/index.js';
 
 export interface ReviewOptions {
   staged?: boolean;
@@ -33,29 +41,33 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
     process.exit(1);
   }
 
-  console.log(`Analyzing ${source.type}: ${source.value}`);
-  console.log(`Format: ${options.format}`);
-  if (options.focus) console.log(`Focus: ${options.focus}`);
-  console.log('');
+  const format = validateFormat(options.format);
+  const focus = options.focus ? validateFocus(options.focus) : undefined;
 
   try {
     const result = await getDiff(gitEngine, source);
 
-    if (result.prInfo) {
-      console.log(`PR #${result.prInfo.number}: ${result.prInfo.title}`);
-      console.log(`Author: ${result.prInfo.author}`);
-      console.log(`Base: ${result.prInfo.baseBranch} <- Head: ${result.prInfo.headBranch}`);
-      if (result.prInfo.description) {
-        console.log(`\nDescription:\n${result.prInfo.description}`);
-      }
-      console.log('');
+    const context = await buildReviewContext(gitEngine, result, options);
+
+    const promptBuilderOptions: PromptBuilderOptions = {
+      format,
+      focus,
+      maxTokens: options.maxTokens ? parseInt(options.maxTokens, 10) : undefined,
+    };
+
+    const promptBuilder = new PromptBuilder(promptBuilderOptions);
+    const promptResult = await promptBuilder.buildPrompt(context);
+
+    if (options.output) {
+      const fs = await import('fs');
+      fs.writeFileSync(options.output, promptResult.content, 'utf-8');
+      console.log(`Output written to ${options.output}`);
+    } else {
+      console.log(promptResult.content);
     }
 
-    displayDiff(result.diff);
-
-    if (options.history !== false) {
-      await displayHistory(gitEngine, result.diff);
-    }
+    console.error(`\nFormat: ${promptResult.format}`);
+    console.error(`Estimated tokens: ${promptResult.tokenEstimate}`);
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : error);
     process.exit(1);
@@ -110,47 +122,6 @@ async function getDiff(
   }
 }
 
-function displayDiff(diff: GitDiff): void {
-  console.log(`Files changed: ${diff.stats.filesChanged}`);
-  console.log(`Insertions: +${diff.stats.insertions}`);
-  console.log(`Deletions: -${diff.stats.deletions}`);
-  console.log('');
-
-  for (const file of diff.files) {
-    const statusIcon = getStatusIcon(file.status);
-    console.log(`${statusIcon} ${file.path} (+${file.additions}, -${file.deletions})`);
-  }
-}
-
-function getStatusIcon(status: string): string {
-  switch (status) {
-    case 'added':
-      return '[+]';
-    case 'modified':
-      return '[M]';
-    case 'deleted':
-      return '[-]';
-    case 'renamed':
-      return '[R]';
-    default:
-      return '[?]';
-  }
-}
-
-async function displayHistory(gitEngine: GitEngine, diff: GitDiff): Promise<void> {
-  console.log('\nRecent commits:');
-
-  for (const file of diff.files.slice(0, 5)) {
-    const commits = await gitEngine.getRecentCommits(file.path, 3);
-    if (commits.length > 0) {
-      console.log(`\n${file.path}:`);
-      for (const commit of commits) {
-        console.log(`  ${commit.hash.slice(0, 7)} ${commit.message} (${commit.author})`);
-      }
-    }
-  }
-}
-
 function determineSource(options: ReviewOptions): { type: string; value: string } | null {
   if (options.staged) return { type: 'staged', value: 'index' };
   if (options.unstaged) return { type: 'unstaged', value: 'working-directory' };
@@ -158,4 +129,60 @@ function determineSource(options: ReviewOptions): { type: string; value: string 
   if (options.branch) return { type: 'branch', value: options.branch };
   if (options.pr) return { type: 'pr', value: options.pr };
   return null;
+}
+
+function validateFormat(format?: string): OutputFormat {
+  if (!format) return 'markdown';
+  if (!SUPPORTED_FORMATS.includes(format as OutputFormat)) {
+    throw new Error(
+      `Invalid format: ${format}. Supported formats: ${SUPPORTED_FORMATS.join(', ')}`,
+    );
+  }
+  return format as OutputFormat;
+}
+
+function validateFocus(focus: string): ReviewFocus {
+  if (!REVIEW_FOCUSES.includes(focus as ReviewFocus)) {
+    throw new Error(`Invalid focus: ${focus}. Supported focuses: ${REVIEW_FOCUSES.join(', ')}`);
+  }
+  return focus as ReviewFocus;
+}
+
+async function buildReviewContext(
+  gitEngine: GitEngine,
+  result: DiffResult,
+  options: ReviewOptions,
+): Promise<ReviewContext> {
+  const changes = result.diff.files.map((file) => ({
+    path: file.path,
+    status: file.status,
+    additions: file.additions,
+    deletions: file.deletions,
+  }));
+
+  const relatedFiles: string[] = [];
+
+  if (options.history !== false) {
+    const history = [];
+    for (const file of result.diff.files.slice(0, 5)) {
+      const commits = await gitEngine.getRecentCommits(file.path, 3);
+      history.push(...commits);
+    }
+
+    return {
+      changes,
+      relatedFiles,
+      history,
+      conventions: {},
+      architecture: { structure: [], frameworks: [], patterns: [] },
+    };
+  }
+
+  return {
+    changes,
+    relatedFiles,
+    history: [],
+    conventions: {},
+    architecture: { structure: [], frameworks: [], patterns: [] },
+  };
 }
