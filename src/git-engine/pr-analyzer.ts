@@ -1,7 +1,9 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import {
+  execCommand,
+  validatePrNumber,
+  validateRepoName,
+  validateOwnerName,
+} from '../utils/index.js';
 
 export interface PRInfo {
   number: number;
@@ -23,7 +25,7 @@ export interface RemoteInfo {
 export class PRAnalyzer {
   async detectRemote(): Promise<RemoteInfo | null> {
     try {
-      const { stdout } = await execAsync('git remote get-url origin');
+      const { stdout } = await execCommand('git remote get-url origin');
       const url = stdout.trim();
 
       const githubMatch = url.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
@@ -51,12 +53,17 @@ export class PRAnalyzer {
   }
 
   async fetchPR(prNumber: number): Promise<PRInfo> {
+    validatePrNumber(prNumber);
+
     const remote = await this.detectRemote();
     if (!remote) {
       throw new Error(
         'Could not detect remote provider. Ensure you are in a git repository with a GitHub or GitLab remote.',
       );
     }
+
+    validateOwnerName(remote.owner);
+    validateRepoName(remote.repo);
 
     if (remote.provider === 'github') {
       return this.fetchGitHubPR(remote, prNumber);
@@ -67,12 +74,12 @@ export class PRAnalyzer {
 
   private async fetchGitHubPR(remote: RemoteInfo, prNumber: number): Promise<PRInfo> {
     try {
-      const { stdout: prJson } = await execAsync(
+      const { stdout: prJson } = await execCommand(
         `gh pr view ${prNumber} --json title,body,author,baseRefName,headRefName --repo ${remote.owner}/${remote.repo}`,
       );
       const prData = JSON.parse(prJson);
 
-      const { stdout: diff } = await execAsync(
+      const { stdout: diff } = await execCommand(
         `gh pr diff ${prNumber} --repo ${remote.owner}/${remote.repo}`,
       );
 
@@ -96,12 +103,12 @@ export class PRAnalyzer {
 
   private async fetchGitLabPR(remote: RemoteInfo, prNumber: number): Promise<PRInfo> {
     try {
-      const { stdout: mrJson } = await execAsync(
+      const { stdout: mrJson } = await execCommand(
         `glab mr view ${prNumber} --json --repo ${remote.owner}/${remote.repo}`,
       );
       const mrData = JSON.parse(mrJson);
 
-      const { stdout: diff } = await execAsync(
+      const { stdout: diff } = await execCommand(
         `glab mr diff ${prNumber} --repo ${remote.owner}/${remote.repo}`,
       );
 
@@ -125,11 +132,11 @@ export class PRAnalyzer {
 
   async isAvailable(): Promise<boolean> {
     try {
-      await execAsync('gh --version');
+      await execCommand('gh --version');
       return true;
     } catch {
       try {
-        await execAsync('glab --version');
+        await execCommand('glab --version');
         return true;
       } catch {
         return false;

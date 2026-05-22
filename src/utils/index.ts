@@ -1,5 +1,63 @@
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+export interface ExecCommandOptions {
+  timeout?: number;
+  cwd?: string;
+}
+
+export interface ExecCommandResult {
+  stdout: string;
+  stderr: string;
+}
+
+export async function execCommand(
+  command: string,
+  options: ExecCommandOptions = {},
+): Promise<ExecCommandResult> {
+  const { timeout = 30000, cwd } = options;
+
+  const sanitizedCommand = sanitizeCommand(command);
+
+  return execAsync(sanitizedCommand, {
+    timeout,
+    cwd,
+    maxBuffer: 1024 * 1024 * 10,
+  });
+}
+
+function sanitizeCommand(command: string): string {
+  const parts = command.split(' ');
+  const sanitized = parts.map((part) => {
+    if (/^[a-zA-Z0-9._\-/@:]+$/.test(part)) {
+      return part;
+    }
+    return `"${part.replace(/"/g, '\\"')}"`;
+  });
+  return sanitized.join(' ');
+}
+
+export function validatePrNumber(prNumber: number): void {
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    throw new Error(`Invalid PR number: ${prNumber}. Must be a positive integer.`);
+  }
+}
+
+export function validateRepoName(name: string): void {
+  if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
+    throw new Error(`Invalid repository name: ${name}. Contains invalid characters.`);
+  }
+}
+
+export function validateOwnerName(name: string): void {
+  if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
+    throw new Error(`Invalid owner name: ${name}. Contains invalid characters.`);
+  }
+}
 
 export interface FileChange {
   path: string;
