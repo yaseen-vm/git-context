@@ -190,7 +190,10 @@ export class DependencyAnalyzer {
           return true;
         }
       }
-    } catch {
+    } catch (error) {
+      console.warn(
+        `Warning: Failed to check path alias: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
 
@@ -228,7 +231,10 @@ export class DependencyAnalyzer {
           }
         }
       }
-    } catch {
+    } catch (error) {
+      console.warn(
+        `Warning: Failed to resolve path alias: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
 

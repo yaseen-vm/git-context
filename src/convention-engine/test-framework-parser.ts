@@ -170,8 +170,10 @@ export function parseTestFrameworkConfig(repoPath: string): TestFrameworkConfig 
         if (config.setupFilesAfterFramework)
           setupFiles.push(...config.setupFilesAfterFramework.map(String));
         if (config.coverageProvider) coverageProvider = config.coverageProvider;
-      } catch {
-        // Ignore parse errors
+      } catch (error) {
+        console.warn(
+          `Warning: Failed to parse ${configFile}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     } else if (
       configFile.endsWith('.js') ||
