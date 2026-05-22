@@ -299,6 +299,87 @@ describe('PromptBuilder — json format', () => {
   });
 });
 
+describe('PromptBuilder — prompt format', () => {
+  it('returns format: prompt', async () => {
+    const builder = new PromptBuilder({ format: 'prompt' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.format).toBe('prompt');
+  });
+
+  it('starts with an expert reviewer preamble', async () => {
+    const builder = new PromptBuilder({ format: 'prompt' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toMatch(/expert code reviewer/i);
+  });
+
+  it('uses custom systemPreamble from template', async () => {
+    const template = { name: 'custom', systemPreamble: 'You are a security auditor.' };
+    const builder = new PromptBuilder({ format: 'prompt', template });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('You are a security auditor.');
+    expect(result.content).not.toMatch(/expert code reviewer/i);
+  });
+
+  it('includes ## Changed Files section with per-file status', async () => {
+    const builder = new PromptBuilder({ format: 'prompt' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Changed Files');
+    expect(result.content).toContain('### src/auth/login.ts');
+    expect(result.content).toContain('modified');
+    expect(result.content).toContain('+20');
+  });
+
+  it('includes related files section', async () => {
+    const builder = new PromptBuilder({ format: 'prompt' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Related Files for Context');
+    expect(result.content).toContain('src/auth/middleware.ts');
+  });
+
+  it('includes recent changes section capped at 5 commits', async () => {
+    const manyCommits = Array.from({ length: 10 }, (_, i) => ({
+      hash: `hash${i}`, date: '2026-01-01', message: `commit ${i}`, author: 'dev',
+    }));
+    const ctx = { ...baseContext, history: manyCommits };
+    const builder = new PromptBuilder({ format: 'prompt' });
+    const result = await builder.buildPrompt(ctx);
+    expect(result.content).toContain('## Recent Changes to These Files');
+    expect((result.content.match(/- commit/g) ?? []).length).toBe(5);
+  });
+
+  it('includes conventions when present', async () => {
+    const builder = new PromptBuilder({ format: 'prompt' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Team Conventions');
+    expect(result.content).toContain('TypeScript strict mode');
+  });
+
+  it('includes ## Your Task with focus-specific instructions', async () => {
+    const builder = new PromptBuilder({ format: 'prompt', focus: 'security' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('## Your Task');
+    expect(result.content).toMatch(/security/i);
+  });
+
+  it('emits focus line when focus is set', async () => {
+    const builder = new PromptBuilder({ format: 'prompt', focus: 'refactor' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).toContain('**refactor**');
+  });
+
+  it('omits related files section when empty', async () => {
+    const builder = new PromptBuilder({ format: 'prompt' });
+    const result = await builder.buildPrompt(emptyContext);
+    expect(result.content).not.toContain('## Related Files');
+  });
+
+  it('is ready for direct paste into an LLM — no JSON wrapping', async () => {
+    const builder = new PromptBuilder({ format: 'prompt' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(() => JSON.parse(result.content)).toThrow();
+  });
+});
+
 describe('PromptBuilder template system — sectionOrder', () => {
   it('respects custom section order', async () => {
     const template: PromptTemplate = {
