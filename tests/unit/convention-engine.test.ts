@@ -21,6 +21,7 @@ import {
   parsePackageJson,
   summarizePackageJsonConfig,
 } from '../../src/convention-engine/package-json-parser.js';
+import { parseCIConfig, summarizeCIConfig } from '../../src/convention-engine/ci-config-parser.js';
 
 describe('ConventionEngine', () => {
   let tmpDir: string;
@@ -978,6 +979,254 @@ export default tseslint.config(
         expect(config).not.toBeNull();
         expect(config!.detectedFramework).toBe('React');
         expect(config!.detectedTestFramework).toBe('Testing Library (React)');
+      });
+    });
+  });
+
+  describe('Issue #19: CI pipeline parsing', () => {
+    describe('GitHub Actions parsing', () => {
+      it('should return null when no CI config exists', () => {
+        const config = parseCIConfig(tmpDir);
+        expect(config).toBeNull();
+      });
+
+      it('should parse GitHub Actions workflow', () => {
+        fs.mkdirSync(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'ci.yml'),
+          `name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test`,
+        );
+
+        const config = parseCIConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasGitHubActions).toBe(true);
+        expect(config!.hasGitLabCI).toBe(false);
+        expect(config!.provider).toBe('github');
+        expect(config!.workflows).toHaveLength(1);
+
+        const workflow = config!.workflows[0];
+        expect(workflow.name).toBe('CI');
+        expect(workflow.provider).toBe('github');
+        expect(workflow.jobs).toContain('build');
+        expect(workflow.hasTestStep).toBe(true);
+        expect(workflow.hasLintStep).toBe(true);
+        expect(workflow.hasBuildStep).toBe(true);
+        expect(workflow.nodeVersion).toBe('20');
+      });
+
+      it('should parse multiple workflows', () => {
+        fs.mkdirSync(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'ci.yml'),
+          `name: CI
+
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+        );
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'deploy.yml'),
+          `name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm run deploy`,
+        );
+
+        const config = parseCIConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.workflows).toHaveLength(2);
+
+        const ciWorkflow = config!.workflows.find((w) => w.name === 'CI');
+        expect(ciWorkflow).toBeDefined();
+        expect(ciWorkflow!.hasTestStep).toBe(true);
+
+        const deployWorkflow = config!.workflows.find((w) => w.name === 'Deploy');
+        expect(deployWorkflow).toBeDefined();
+        expect(deployWorkflow!.hasDeployStep).toBe(true);
+      });
+    });
+
+    describe('GitLab CI parsing', () => {
+      it('should parse GitLab CI config', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, '.gitlab-ci.yml'),
+          `stages:
+  - build
+  - test
+  - deploy
+
+build:
+  stage: build
+  script:
+    - npm run build
+
+test:
+  stage: test
+  script:
+    - npm test
+
+deploy:
+  stage: deploy
+  script:
+    - npm run deploy`,
+        );
+
+        const config = parseCIConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.hasGitLabCI).toBe(true);
+        expect(config!.hasGitHubActions).toBe(false);
+        expect(config!.provider).toBe('gitlab');
+        expect(config!.workflows).toHaveLength(1);
+
+        const workflow = config!.workflows[0];
+        expect(workflow.name).toBe('GitLab CI');
+        expect(workflow.provider).toBe('gitlab');
+        expect(workflow.triggers).toContain('build');
+        expect(workflow.triggers).toContain('test');
+        expect(workflow.triggers).toContain('deploy');
+      });
+    });
+
+    describe('CI config summarization', () => {
+      it('should summarize GitHub Actions conventions', () => {
+        fs.mkdirSync(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'ci.yml'),
+          `name: CI
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build`,
+        );
+
+        const config = parseCIConfig(tmpDir);
+        const summary = summarizeCIConfig(config);
+
+        expect(summary).toContain('CI: GitHub Actions');
+        expect(summary).toContain('Workflow: CI');
+        expect(summary).toContain('  Jobs: build');
+        expect(summary).toContain('  Pipeline steps: test, lint, build');
+      });
+
+      it('should handle missing CI config in summary', () => {
+        const summary = summarizeCIConfig(null);
+        expect(summary).toContain('No CI configuration found');
+      });
+    });
+
+    describe('ConventionEngine CI integration', () => {
+      it('should include CI config in analyze result', () => {
+        fs.mkdirSync(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'ci.yml'),
+          `name: CI
+
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const result = engine.analyze();
+
+        expect(result.ci).not.toBeNull();
+        expect(result.ci!.hasGitHubActions).toBe(true);
+
+        const ciSummary = result.summaries.find((s) => s.source === 'CI');
+        expect(ciSummary).toBeDefined();
+        expect(ciSummary!.category).toBe('ci');
+        expect(ciSummary!.conventions).toContain('CI: GitHub Actions');
+      });
+
+      it('should provide getCIConfig shortcut', () => {
+        fs.mkdirSync(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'ci.yml'),
+          `name: CI
+
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const config = engine.getCIConfig();
+
+        expect(config).not.toBeNull();
+        expect(config!.hasGitHubActions).toBe(true);
+      });
+
+      it('should provide getCIConventions shortcut', () => {
+        fs.mkdirSync(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, '.github', 'workflows', 'ci.yml'),
+          `name: CI
+
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const conventions = engine.getCIConventions();
+
+        expect(conventions).toContain('CI: GitHub Actions');
+        expect(conventions).toContain('Workflow: CI');
+      });
+
+      it('should handle no CI config gracefully', () => {
+        const engine = new ConventionEngine(tmpDir);
+        const result = engine.analyze();
+
+        expect(result.ci).toBeNull();
       });
     });
   });

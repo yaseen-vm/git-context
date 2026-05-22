@@ -13,6 +13,8 @@ export type {
   LintFormatConfig,
   TypeScriptConfig,
   PackageJsonConfig,
+  CIConfig,
+  CIWorkflow,
   ConventionSummary,
   ConventionEngineResult,
 } from './convention-engine/index.js';
