@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { SecretFilter } from '../../src/secret-filter/index.js';
 import { isSecretFile, shouldExcludeFile, SECRET_PATTERNS } from '../../src/utils/index.js';
 
@@ -137,6 +140,62 @@ describe('SecretFilter.isBinaryContent', () => {
   it('returns false for plain text', () => {
     const filter = new SecretFilter();
     expect(filter.isBinaryContent('plain text content')).toBe(false);
+  });
+});
+
+describe('SecretFilter gitignore handling', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-context-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('respects root .gitignore patterns', () => {
+    fs.writeFileSync(path.join(tmpDir, '.gitignore'), 'logs/\n*.log\n');
+    const filter = new SecretFilter({ respectGitignore: true, repoRoot: tmpDir });
+    expect(filter.isIgnoredByGitignore('logs/app.log')).toBe(true);
+    expect(filter.isIgnoredByGitignore('debug.log')).toBe(true);
+    expect(filter.isIgnoredByGitignore('src/app.ts')).toBe(false);
+  });
+
+  it('respects root .ignore patterns', () => {
+    fs.writeFileSync(path.join(tmpDir, '.ignore'), 'tmp/\n*.tmp\n');
+    const filter = new SecretFilter({ respectGitignore: true, repoRoot: tmpDir });
+    expect(filter.isIgnoredByGitignore('tmp/cache')).toBe(true);
+    expect(filter.isIgnoredByGitignore('session.tmp')).toBe(true);
+    expect(filter.isIgnoredByGitignore('src/index.ts')).toBe(false);
+  });
+
+  it('excludes gitignored files in filterFiles', () => {
+    fs.writeFileSync(path.join(tmpDir, '.gitignore'), '*.log\n');
+    const filter = new SecretFilter({ respectGitignore: true, repoRoot: tmpDir });
+    const result = filter.filterFiles(['app.log', 'src/app.ts']);
+    expect(result.excluded).toContain('app.log');
+    expect(result.allowed).toContain('src/app.ts');
+  });
+
+  it('returns false when no repoRoot is provided', () => {
+    const filter = new SecretFilter({ respectGitignore: true });
+    expect(filter.isIgnoredByGitignore('logs/app.log')).toBe(false);
+  });
+
+  it('returns false when respectGitignore is false', () => {
+    fs.writeFileSync(path.join(tmpDir, '.gitignore'), '*.log\n');
+    const filter = new SecretFilter({ respectGitignore: false, repoRoot: tmpDir });
+    expect(filter.isIgnoredByGitignore('debug.log')).toBe(false);
+  });
+
+  it('handles nested .gitignore files', () => {
+    const subDir = path.join(tmpDir, 'packages', 'api');
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.writeFileSync(path.join(subDir, '.gitignore'), '*.generated.ts\n');
+    const filter = new SecretFilter({ respectGitignore: true, repoRoot: tmpDir });
+    expect(filter.isIgnoredByGitignore('packages/api/types.generated.ts')).toBe(true);
+    expect(filter.isIgnoredByGitignore('packages/api/service.ts')).toBe(false);
   });
 });
 

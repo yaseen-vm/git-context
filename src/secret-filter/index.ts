@@ -1,8 +1,12 @@
+import fs from 'fs';
+import path from 'path';
+import ignore, { type Ignore } from 'ignore';
 import { shouldExcludeFile, isSecretFile } from '../utils/index.js';
 
 export interface SecretFilterOptions {
   respectGitignore?: boolean;
   excludePatterns?: string[];
+  repoRoot?: string;
 }
 
 export interface FilterResult {
@@ -13,12 +17,75 @@ export interface FilterResult {
 
 export class SecretFilter {
   private options: SecretFilterOptions;
+  private ignoreFilter: Ignore | null = null;
 
   constructor(options: SecretFilterOptions = {}) {
     this.options = {
       respectGitignore: true,
       ...options,
     };
+
+    if (this.options.respectGitignore && this.options.repoRoot) {
+      this.ignoreFilter = this.loadIgnoreRules(this.options.repoRoot);
+    }
+  }
+
+  private loadIgnoreRules(repoRoot: string): Ignore {
+    const ig = ignore();
+    const ignoreFiles = ['.gitignore', '.ignore'];
+
+    for (const ignoreFile of ignoreFiles) {
+      const filePath = path.join(repoRoot, ignoreFile);
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        ig.add(content);
+      }
+    }
+
+    this.loadNestedGitignores(repoRoot, repoRoot, ig);
+
+    return ig;
+  }
+
+  private loadNestedGitignores(repoRoot: string, dir: string, ig: Ignore): void {
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(dir);
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (entry === 'node_modules' || entry === '.git') continue;
+      const fullPath = path.join(dir, entry);
+
+      let stat: fs.Stats;
+      try {
+        stat = fs.statSync(fullPath);
+      } catch {
+        continue;
+      }
+
+      if (stat.isDirectory()) {
+        const nestedGitignore = path.join(fullPath, '.gitignore');
+        if (fs.existsSync(nestedGitignore)) {
+          const content = fs.readFileSync(nestedGitignore, 'utf-8');
+          const relDir = path.relative(repoRoot, fullPath).replace(/\\/g, '/');
+          const prefixedRules = content
+            .split('\n')
+            .filter((line) => line.trim() && !line.startsWith('#'))
+            .map((line) => {
+              const trimmed = line.trim();
+              return trimmed.startsWith('/')
+                ? `${relDir}${trimmed}`
+                : `${relDir}/${trimmed}`;
+            })
+            .join('\n');
+          if (prefixedRules) ig.add(prefixedRules);
+        }
+        this.loadNestedGitignores(repoRoot, fullPath, ig);
+      }
+    }
   }
 
   filterFiles(files: string[]): FilterResult {
@@ -33,12 +100,20 @@ export class SecretFilter {
         excluded.push(file);
       } else if (this.matchesExcludePatterns(file)) {
         excluded.push(file);
+      } else if (this.isIgnoredByGitignore(file)) {
+        excluded.push(file);
       } else {
         allowed.push(file);
       }
     }
 
     return { allowed, excluded, secrets };
+  }
+
+  isIgnoredByGitignore(filePath: string): boolean {
+    if (!this.ignoreFilter) return false;
+    const normalized = filePath.replace(/\\/g, '/');
+    return this.ignoreFilter.ignores(normalized);
   }
 
   filterContent(content: string): string {
