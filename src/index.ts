@@ -11,6 +11,7 @@ export type {
   ESLintConfig,
   PrettierConfig,
   LintFormatConfig,
+  TypeScriptConfig,
   ConventionSummary,
   ConventionEngineResult,
 } from './convention-engine/index.js';

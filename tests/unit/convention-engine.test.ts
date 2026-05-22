@@ -13,6 +13,10 @@ import {
   summarizeESLintConfig,
   summarizePrettierConfig,
 } from '../../src/convention-engine/eslint-prettier-parser.js';
+import {
+  parseTypeScriptConfig,
+  summarizeTypeScriptConfig,
+} from '../../src/convention-engine/typescript-config-parser.js';
 
 describe('ConventionEngine', () => {
   let tmpDir: string;
@@ -435,6 +439,279 @@ export default tseslint.config(
 
         expect(result.lintFormat.eslint).toBeNull();
         expect(result.lintFormat.prettier).toBeNull();
+      });
+    });
+  });
+
+  describe('Issue #17: TypeScript/JS config parsing', () => {
+    describe('TypeScript config parsing', () => {
+      it('should return null when no tsconfig/jsconfig exists', () => {
+        const config = parseTypeScriptConfig(tmpDir);
+        expect(config).toBeNull();
+      });
+
+      it('should parse tsconfig.json with strict mode', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2022',
+              module: 'ES2022',
+              moduleResolution: 'node',
+              strict: true,
+              esModuleInterop: true,
+              skipLibCheck: true,
+              forceConsistentCasingInFileNames: true,
+              declaration: true,
+              sourceMap: true,
+            },
+            include: ['src/**/*'],
+            exclude: ['node_modules', 'dist'],
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.configFile).toBe('tsconfig.json');
+        expect(config!.isStrict).toBe(true);
+        expect(config!.target).toBe('ES2022');
+        expect(config!.module).toBe('ES2022');
+        expect(config!.moduleResolution).toBe('node');
+        expect(config!.esModuleInterop).toBe(true);
+        expect(config!.skipLibCheck).toBe(true);
+        expect(config!.forceConsistentCasingInFileNames).toBe(true);
+        expect(config!.declaration).toBe(true);
+        expect(config!.sourceMap).toBe(true);
+        expect(config!.include).toContain('src/**/*');
+        expect(config!.exclude).toContain('node_modules');
+        expect(config!.exclude).toContain('dist');
+      });
+
+      it('should parse jsconfig.json', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'jsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2020',
+              module: 'commonjs',
+              strict: false,
+            },
+            include: ['src/**/*'],
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.configFile).toBe('jsconfig.json');
+        expect(config!.isStrict).toBe(false);
+        expect(config!.target).toBe('ES2020');
+        expect(config!.module).toBe('commonjs');
+      });
+
+      it('should parse path aliases', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2022',
+              module: 'ES2022',
+              moduleResolution: 'node',
+              baseUrl: '.',
+              paths: {
+                '@/*': ['./src/*'],
+                '@utils/*': ['./src/utils/*'],
+              },
+            },
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.baseUrl).toBe('.');
+        expect(config!.paths['@/*']).toEqual(['./src/*']);
+        expect(config!.paths['@utils/*']).toEqual(['./src/utils/*']);
+      });
+
+      it('should parse JSX settings', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2022',
+              module: 'ES2022',
+              jsx: 'react-jsx',
+            },
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.jsx).toBe('react-jsx');
+      });
+
+      it('should parse lib settings', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2022',
+              lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+            },
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        expect(config).not.toBeNull();
+        expect(config!.lib).toContain('ES2022');
+        expect(config!.lib).toContain('DOM');
+        expect(config!.lib).toContain('DOM.Iterable');
+      });
+
+      it('should summarize TypeScript conventions', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2022',
+              module: 'ES2022',
+              moduleResolution: 'node',
+              strict: true,
+              declaration: true,
+              sourceMap: true,
+            },
+            include: ['src/**/*'],
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        const summary = summarizeTypeScriptConfig(config);
+
+        expect(summary).toContain('Config file: tsconfig.json');
+        expect(summary).toContain('Strict mode enabled');
+        expect(summary).toContain('Target: ES2022');
+        expect(summary).toContain('Module system: ES2022');
+        expect(summary).toContain('Module resolution: node');
+        expect(summary).toContain('Declaration files generated');
+        expect(summary).toContain('Source maps enabled');
+        expect(summary).toContain('Include: src/**/*');
+      });
+
+      it('should handle missing TypeScript config in summary', () => {
+        const summary = summarizeTypeScriptConfig(null);
+        expect(summary).toContain('No TypeScript/JavaScript configuration found');
+      });
+
+      it('should handle non-strict mode in summary', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              strict: false,
+            },
+          }),
+        );
+
+        const config = parseTypeScriptConfig(tmpDir);
+        const summary = summarizeTypeScriptConfig(config);
+
+        expect(summary).toContain('Strict mode disabled');
+      });
+    });
+
+    describe('ConventionEngine TypeScript integration', () => {
+      it('should include TypeScript config in analyze result', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2022',
+              strict: true,
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const result = engine.analyze();
+
+        expect(result.typeScript).not.toBeNull();
+        expect(result.typeScript!.configFile).toBe('tsconfig.json');
+        expect(result.typeScript!.isStrict).toBe(true);
+
+        const tsSummary = result.summaries.find((s) => s.source === 'TypeScript');
+        expect(tsSummary).toBeDefined();
+        expect(tsSummary!.category).toBe('typescript');
+        expect(tsSummary!.conventions).toContain('Strict mode enabled');
+      });
+
+      it('should provide getTypeScriptConfig shortcut', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2022',
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const config = engine.getTypeScriptConfig();
+
+        expect(config).not.toBeNull();
+        expect(config!.configFile).toBe('tsconfig.json');
+        expect(config!.target).toBe('ES2022');
+      });
+
+      it('should provide getTypeScriptConventions shortcut', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              strict: true,
+              declaration: true,
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const conventions = engine.getTypeScriptConventions();
+
+        expect(conventions).toContain('Strict mode enabled');
+        expect(conventions).toContain('Declaration files generated');
+      });
+
+      it('should handle no TypeScript config gracefully', () => {
+        const engine = new ConventionEngine(tmpDir);
+        const result = engine.analyze();
+
+        expect(result.typeScript).toBeNull();
+      });
+
+      it('should prefer tsconfig over jsconfig', () => {
+        fs.writeFileSync(
+          path.join(tmpDir, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2022',
+              strict: true,
+            },
+          }),
+        );
+        fs.writeFileSync(
+          path.join(tmpDir, 'jsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              target: 'ES2020',
+              strict: false,
+            },
+          }),
+        );
+
+        const engine = new ConventionEngine(tmpDir);
+        const config = engine.getTypeScriptConfig();
+
+        expect(config).not.toBeNull();
+        expect(config!.configFile).toBe('tsconfig.json');
+        expect(config!.isStrict).toBe(true);
       });
     });
   });

@@ -43,6 +43,26 @@ export interface LintFormatConfig {
   prettier: PrettierConfig | null;
 }
 
+export interface TypeScriptConfig {
+  configFile: string | null;
+  isStrict: boolean;
+  target: string | null;
+  module: string | null;
+  moduleResolution: string | null;
+  paths: Record<string, string[]>;
+  baseUrl: string | null;
+  jsx: string | null;
+  esModuleInterop: boolean | null;
+  skipLibCheck: boolean | null;
+  forceConsistentCasingInFileNames: boolean | null;
+  declaration: boolean | null;
+  declarationMap: boolean | null;
+  sourceMap: boolean | null;
+  lib: string[];
+  include: string[];
+  exclude: string[];
+}
+
 export interface ConventionSummary {
   source: string;
   category: 'formatting' | 'lint' | 'typescript' | 'package' | 'ci' | 'test';
@@ -52,5 +72,6 @@ export interface ConventionSummary {
 export interface ConventionEngineResult {
   editorConfig: EditorConfig | null;
   lintFormat: LintFormatConfig;
+  typeScript: TypeScriptConfig | null;
   summaries: ConventionSummary[];
 }
