@@ -70,18 +70,20 @@ export class PromptBuilder {
   async buildPrompt(context: ReviewContext): Promise<PromptResult> {
     const { format, focus, maxTokens } = this.options;
 
+    const optimized = maxTokens ? this.optimizeContext(context, maxTokens) : context;
+
     let content: string;
 
     switch (format) {
       case 'json':
-        content = this.buildJsonOutput(context, focus);
+        content = this.buildJsonOutput(optimized, focus);
         break;
       case 'prompt':
-        content = this.buildAIPrompt(context, focus);
+        content = this.buildAIPrompt(optimized, focus);
         break;
       case 'markdown':
       default:
-        content = this.buildMarkdownOutput(context, focus);
+        content = this.buildMarkdownOutput(optimized, focus);
         break;
     }
 
@@ -94,6 +96,64 @@ export class PromptBuilder {
       format,
       tokenEstimate: this.estimateTokens(content),
     };
+  }
+
+  /**
+   * Reduces context to fit within the token budget before building output.
+   * Strategy:
+   *  1. Deduplicate related files against changed files (highest signal kept, overlap removed)
+   *  2. Prioritize changed files with most additions/deletions (high-signal first)
+   *  3. Limit history and related files proportionally to remaining budget
+   *  4. Drop low-signal items when budget is very tight
+   */
+  optimizeContext(context: ReviewContext, maxTokens: number): ReviewContext {
+    const changedSet = new Set(context.changes.map((c) => c.path));
+
+    // Deduplicate: remove related files that are already in changed files
+    const deduplicatedRelated = context.relatedFiles.filter((f) => !changedSet.has(f));
+
+    // Prioritize changed files by total line impact (additions + deletions)
+    const sortedChanges = [...context.changes].sort(
+      (a, b) => b.additions + b.deletions - (a.additions + a.deletions),
+    );
+
+    // Estimate base token cost of fixed content (task description + headings ≈ 200 tokens)
+    const fixedTokens = 200;
+    const available = Math.max(0, maxTokens - fixedTokens);
+
+    // Allocate budget proportionally: 40% changes, 25% related, 20% history, 15% conventions+arch
+    const changeBudget = Math.floor(available * 0.4);
+    const relatedBudget = Math.floor(available * 0.25);
+    const historyBudget = Math.floor(available * 0.2);
+
+    const keptPaths = new Set(
+      this.limitByTokenBudget(sortedChanges.map((c) => c.path), changeBudget),
+    );
+    const limitedChanges = sortedChanges.filter((c) => keptPaths.has(c.path));
+    const limitedRelated = this.limitByTokenBudget(deduplicatedRelated, relatedBudget);
+    const limitedHistory = context.history.slice(
+      0,
+      Math.max(1, Math.floor(historyBudget / 20)),
+    );
+
+    return {
+      ...context,
+      changes: limitedChanges,
+      relatedFiles: limitedRelated,
+      history: limitedHistory,
+    };
+  }
+
+  private limitByTokenBudget(items: string[], tokenBudget: number): string[] {
+    const result: string[] = [];
+    let used = 0;
+    for (const item of items) {
+      const cost = this.estimateTokens(item);
+      if (used + cost > tokenBudget) break;
+      result.push(item);
+      used += cost;
+    }
+    return result;
   }
 
   getTaskDescription(focus?: ReviewFocus): string {

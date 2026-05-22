@@ -445,6 +445,78 @@ describe('PromptBuilder — review focus modes', () => {
   });
 });
 
+describe('PromptBuilder — token optimization', () => {
+  it('deduplicates related files that are already in changed files', () => {
+    const builder = new PromptBuilder({ format: 'markdown', maxTokens: 10000 });
+    const ctx: ReviewContext = {
+      ...baseContext,
+      changes: [{ path: 'src/auth/login.ts', status: 'modified', additions: 10, deletions: 2 }],
+      relatedFiles: ['src/auth/login.ts', 'src/auth/middleware.ts'],
+    };
+    const optimized = builder.optimizeContext(ctx, 10000);
+    expect(optimized.relatedFiles).not.toContain('src/auth/login.ts');
+    expect(optimized.relatedFiles).toContain('src/auth/middleware.ts');
+  });
+
+  it('sorts changed files by total line impact (additions + deletions) descending', () => {
+    const builder = new PromptBuilder({ format: 'markdown', maxTokens: 10000 });
+    const ctx: ReviewContext = {
+      ...baseContext,
+      changes: [
+        { path: 'low.ts', status: 'modified', additions: 1, deletions: 0 },
+        { path: 'high.ts', status: 'modified', additions: 50, deletions: 30 },
+        { path: 'mid.ts', status: 'modified', additions: 10, deletions: 5 },
+      ],
+    };
+    const optimized = builder.optimizeContext(ctx, 10000);
+    const paths = optimized.changes.map((c) => c.path);
+    expect(paths[0]).toBe('high.ts');
+    expect(paths[1]).toBe('mid.ts');
+    expect(paths[2]).toBe('low.ts');
+  });
+
+  it('limits history proportionally to budget', () => {
+    const builder = new PromptBuilder({ format: 'markdown', maxTokens: 300 });
+    const manyCommits = Array.from({ length: 50 }, (_, i) => ({
+      hash: `hash${i}`, date: '2026-01-01', message: `commit ${i}`, author: 'dev',
+    }));
+    const ctx = { ...baseContext, history: manyCommits };
+    const optimized = builder.optimizeContext(ctx, 300);
+    expect(optimized.history.length).toBeLessThan(50);
+    expect(optimized.history.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('drops related files when budget is very tight', () => {
+    const builder = new PromptBuilder({ format: 'markdown', maxTokens: 210 });
+    const ctx: ReviewContext = {
+      ...baseContext,
+      relatedFiles: Array.from({ length: 100 }, (_, i) => `src/file${i}.ts`),
+    };
+    const optimized = builder.optimizeContext(ctx, 210);
+    expect(optimized.relatedFiles.length).toBeLessThan(100);
+  });
+
+  it('final output respects maxTokens (with small tolerance for suffix)', async () => {
+    const builder = new PromptBuilder({ format: 'markdown', maxTokens: 50 });
+    const result = await builder.buildPrompt(baseContext);
+    // 50 tokens * 4 chars + "[truncated]" (16 chars) ceiling
+    expect(result.tokenEstimate).toBeLessThanOrEqual(65);
+  });
+
+  it('does not truncate when no maxTokens set', async () => {
+    const builder = new PromptBuilder({ format: 'markdown' });
+    const result = await builder.buildPrompt(baseContext);
+    expect(result.content).not.toContain('[truncated]');
+  });
+
+  it('preserves all data when budget is large', () => {
+    const builder = new PromptBuilder({ format: 'markdown', maxTokens: 100000 });
+    const optimized = builder.optimizeContext(baseContext, 100000);
+    expect(optimized.changes).toHaveLength(baseContext.changes.length);
+    expect(optimized.history).toHaveLength(baseContext.history.length);
+  });
+});
+
 describe('PromptBuilder template system — sectionOrder', () => {
   it('respects custom section order', async () => {
     const template: PromptTemplate = {
