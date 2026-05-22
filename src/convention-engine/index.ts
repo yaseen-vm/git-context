@@ -23,19 +23,36 @@ import type {
 
 export class ConventionEngine {
   private repoPath: string;
+  private cachedEditorConfig: EditorConfig | null | undefined;
+  private cachedESLintConfig: ESLintConfig | null | undefined;
+  private cachedPrettierConfig: PrettierConfig | null | undefined;
+  private cachedTypeScriptConfig: TypeScriptConfig | null | undefined;
+  private cachedPackageJsonConfig: PackageJsonConfig | null | undefined;
+  private cachedCIConfig: CIConfig | null | undefined;
+  private cachedTestFrameworkConfig: TestFrameworkConfig | null | undefined;
 
   constructor(repoPath: string = process.cwd()) {
     this.repoPath = repoPath;
   }
 
+  invalidateCache(): void {
+    this.cachedEditorConfig = undefined;
+    this.cachedESLintConfig = undefined;
+    this.cachedPrettierConfig = undefined;
+    this.cachedTypeScriptConfig = undefined;
+    this.cachedPackageJsonConfig = undefined;
+    this.cachedCIConfig = undefined;
+    this.cachedTestFrameworkConfig = undefined;
+  }
+
   analyze(): ConventionEngineResult {
-    const editorConfig = parseEditorConfig(this.repoPath);
-    const eslintConfig = parseESLintConfig(this.repoPath);
-    const prettierConfig = parsePrettierConfig(this.repoPath);
-    const typeScriptConfig = parseTypeScriptConfig(this.repoPath);
-    const packageJsonConfig = parsePackageJson(this.repoPath);
-    const ciConfig = parseCIConfig(this.repoPath);
-    const testFrameworkConfig = parseTestFrameworkConfig(this.repoPath);
+    const editorConfig = this.getEditorConfig();
+    const eslintConfig = this.getESLintConfig();
+    const prettierConfig = this.getPrettierConfig();
+    const typeScriptConfig = this.getTypeScriptConfig();
+    const packageJsonConfig = this.getPackageJsonConfig();
+    const ciConfig = this.getCIConfig();
+    const testFrameworkConfig = this.getTestFrameworkConfig();
     const summaries: ConventionSummary[] = [];
 
     const editorConfigConventions = summarizeEditorConfig(editorConfig);
@@ -102,65 +119,86 @@ export class ConventionEngine {
   }
 
   getEditorConfig(): EditorConfig | null {
-    return parseEditorConfig(this.repoPath);
+    if (this.cachedEditorConfig === undefined) {
+      this.cachedEditorConfig = parseEditorConfig(this.repoPath);
+    }
+    return this.cachedEditorConfig;
   }
 
   getFormattingConventions(): string[] {
-    const editorConfig = parseEditorConfig(this.repoPath);
+    const editorConfig = this.getEditorConfig();
     return summarizeEditorConfig(editorConfig);
   }
 
   getESLintConfig(): ESLintConfig | null {
-    return parseESLintConfig(this.repoPath);
+    if (this.cachedESLintConfig === undefined) {
+      this.cachedESLintConfig = parseESLintConfig(this.repoPath);
+    }
+    return this.cachedESLintConfig;
   }
 
   getPrettierConfig(): PrettierConfig | null {
-    return parsePrettierConfig(this.repoPath);
+    if (this.cachedPrettierConfig === undefined) {
+      this.cachedPrettierConfig = parsePrettierConfig(this.repoPath);
+    }
+    return this.cachedPrettierConfig;
   }
 
   getLintConventions(): string[] {
-    const eslintConfig = parseESLintConfig(this.repoPath);
+    const eslintConfig = this.getESLintConfig();
     return summarizeESLintConfig(eslintConfig);
   }
 
   getFormatConventions(): string[] {
-    const prettierConfig = parsePrettierConfig(this.repoPath);
+    const prettierConfig = this.getPrettierConfig();
     return summarizePrettierConfig(prettierConfig);
   }
 
   getTypeScriptConfig(): TypeScriptConfig | null {
-    return parseTypeScriptConfig(this.repoPath);
+    if (this.cachedTypeScriptConfig === undefined) {
+      this.cachedTypeScriptConfig = parseTypeScriptConfig(this.repoPath);
+    }
+    return this.cachedTypeScriptConfig;
   }
 
   getTypeScriptConventions(): string[] {
-    const typeScriptConfig = parseTypeScriptConfig(this.repoPath);
+    const typeScriptConfig = this.getTypeScriptConfig();
     return summarizeTypeScriptConfig(typeScriptConfig);
   }
 
   getPackageJsonConfig(): PackageJsonConfig | null {
-    return parsePackageJson(this.repoPath);
+    if (this.cachedPackageJsonConfig === undefined) {
+      this.cachedPackageJsonConfig = parsePackageJson(this.repoPath);
+    }
+    return this.cachedPackageJsonConfig;
   }
 
   getPackageConventions(): string[] {
-    const packageJsonConfig = parsePackageJson(this.repoPath);
+    const packageJsonConfig = this.getPackageJsonConfig();
     return summarizePackageJsonConfig(packageJsonConfig);
   }
 
   getCIConfig(): CIConfig | null {
-    return parseCIConfig(this.repoPath);
+    if (this.cachedCIConfig === undefined) {
+      this.cachedCIConfig = parseCIConfig(this.repoPath);
+    }
+    return this.cachedCIConfig;
   }
 
   getCIConventions(): string[] {
-    const ciConfig = parseCIConfig(this.repoPath);
+    const ciConfig = this.getCIConfig();
     return summarizeCIConfig(ciConfig);
   }
 
   getTestFrameworkConfig(): TestFrameworkConfig | null {
-    return parseTestFrameworkConfig(this.repoPath);
+    if (this.cachedTestFrameworkConfig === undefined) {
+      this.cachedTestFrameworkConfig = parseTestFrameworkConfig(this.repoPath);
+    }
+    return this.cachedTestFrameworkConfig;
   }
 
   getTestConventions(): string[] {
-    const testFrameworkConfig = parseTestFrameworkConfig(this.repoPath);
+    const testFrameworkConfig = this.getTestFrameworkConfig();
     return summarizeTestFrameworkConfig(testFrameworkConfig);
   }
 }
