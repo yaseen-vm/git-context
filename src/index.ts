@@ -8,6 +8,9 @@ export type {
   EditorConfig,
   EditorConfigRule,
   EditorConfigSection,
+  ESLintConfig,
+  PrettierConfig,
+  LintFormatConfig,
   ConventionSummary,
   ConventionEngineResult,
 } from './convention-engine/index.js';

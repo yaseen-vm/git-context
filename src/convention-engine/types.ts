@@ -18,6 +18,31 @@ export interface EditorConfig {
   sections: EditorConfigSection[];
 }
 
+export interface ESLintConfig {
+  configFile: string | null;
+  extends: string[];
+  plugins: string[];
+  rules: Record<string, unknown>;
+  hasTypeScriptSupport: boolean;
+  hasReactSupport: boolean;
+  hasPrettierIntegration: boolean;
+}
+
+export interface PrettierConfig {
+  configFile: string | null;
+  options: Record<string, unknown>;
+  hasSemi: boolean | null;
+  singleQuote: boolean | null;
+  tabWidth: number | null;
+  trailingComma: string | null;
+  printWidth: number | null;
+}
+
+export interface LintFormatConfig {
+  eslint: ESLintConfig | null;
+  prettier: PrettierConfig | null;
+}
+
 export interface ConventionSummary {
   source: string;
   category: 'formatting' | 'lint' | 'typescript' | 'package' | 'ci' | 'test';
@@ -26,5 +51,6 @@ export interface ConventionSummary {
 
 export interface ConventionEngineResult {
   editorConfig: EditorConfig | null;
+  lintFormat: LintFormatConfig;
   summaries: ConventionSummary[];
 }
