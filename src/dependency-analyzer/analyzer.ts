@@ -1,5 +1,6 @@
 import { Project, SourceFile } from 'ts-morph';
 import path from 'path';
+import fs from 'fs';
 import { loadProject, addSourceFiles } from './project-loader.js';
 import type {
   ImportInfo,
@@ -95,7 +96,7 @@ export class DependencyAnalyzer {
       }
     }
 
-    for (const exportAssignment of sourceFile.getExportAssignments()) {
+    if (sourceFile.getExportAssignments().length > 0) {
       exportNames.push('default');
     }
 
@@ -171,13 +172,13 @@ export class DependencyAnalyzer {
       const jsConfigPath = path.join(this.repoPath, 'jsconfig.json');
 
       let configPath = tsConfigPath;
-      if (!require('fs').existsSync(tsConfigPath) && require('fs').existsSync(jsConfigPath)) {
+      if (!fs.existsSync(tsConfigPath) && fs.existsSync(jsConfigPath)) {
         configPath = jsConfigPath;
       }
 
-      if (!require('fs').existsSync(configPath)) return false;
+      if (!fs.existsSync(configPath)) return false;
 
-      const config = JSON.parse(require('fs').readFileSync(configPath, 'utf-8'));
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const paths = config.compilerOptions?.paths;
 
       if (!paths) return false;
@@ -202,13 +203,13 @@ export class DependencyAnalyzer {
       const jsConfigPath = path.join(this.repoPath, 'jsconfig.json');
 
       let configPath = tsConfigPath;
-      if (!require('fs').existsSync(tsConfigPath) && require('fs').existsSync(jsConfigPath)) {
+      if (!fs.existsSync(tsConfigPath) && fs.existsSync(jsConfigPath)) {
         configPath = jsConfigPath;
       }
 
-      if (!require('fs').existsSync(configPath)) return null;
+      if (!fs.existsSync(configPath)) return null;
 
-      const config = JSON.parse(require('fs').readFileSync(configPath, 'utf-8'));
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const paths = config.compilerOptions?.paths;
 
       if (!paths) return null;
@@ -268,7 +269,7 @@ export class DependencyAnalyzer {
   private fileExists(filePath: string): boolean {
     try {
       const absolutePath = path.resolve(this.repoPath, filePath);
-      return require('fs').existsSync(absolutePath);
+      return fs.existsSync(absolutePath);
     } catch {
       return false;
     }
@@ -485,7 +486,7 @@ export class DependencyAnalyzer {
       if (this.fileExists(configPath)) {
         try {
           const absolutePath = path.resolve(this.repoPath, configPath);
-          const content = require('fs').readFileSync(absolutePath, 'utf-8');
+          const content = fs.readFileSync(absolutePath, 'utf-8');
           if (content.includes(baseName) || content.includes(filePath)) {
             configFiles.push(configPath);
           }
