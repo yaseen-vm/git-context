@@ -12,6 +12,7 @@ export type {
   PrettierConfig,
   LintFormatConfig,
   TypeScriptConfig,
+  PackageJsonConfig,
   ConventionSummary,
   ConventionEngineResult,
 } from './convention-engine/index.js';

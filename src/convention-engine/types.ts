@@ -63,6 +63,23 @@ export interface TypeScriptConfig {
   exclude: string[];
 }
 
+export interface PackageJsonConfig {
+  name: string | null;
+  version: string | null;
+  type: string | null;
+  scripts: Record<string, string>;
+  dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
+  hasBuildScript: boolean;
+  hasTestScript: boolean;
+  hasLintScript: boolean;
+  hasFormatScript: boolean;
+  hasTypecheckScript: boolean;
+  detectedFramework: string | null;
+  detectedBuildTool: string | null;
+  detectedTestFramework: string | null;
+}
+
 export interface ConventionSummary {
   source: string;
   category: 'formatting' | 'lint' | 'typescript' | 'package' | 'ci' | 'test';
@@ -73,5 +90,6 @@ export interface ConventionEngineResult {
   editorConfig: EditorConfig | null;
   lintFormat: LintFormatConfig;
   typeScript: TypeScriptConfig | null;
+  packageJson: PackageJsonConfig | null;
   summaries: ConventionSummary[];
 }
