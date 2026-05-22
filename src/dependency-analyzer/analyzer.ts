@@ -532,47 +532,67 @@ export class DependencyAnalyzer {
 
   findAllRelatedFiles(filePaths: string[], maxHops: number = 2): RelatedFile[] {
     const allRelated = new Map<string, RelatedFile>();
+    const fileSet = new Set(filePaths);
 
     for (const filePath of filePaths) {
-      // Find import-related files
-      const importRelated = this.findRelatedFiles(filePath, maxHops);
-      for (const related of importRelated) {
-        if (!allRelated.has(related.path) || allRelated.get(related.path)!.hops > related.hops) {
-          allRelated.set(related.path, related);
-        }
-      }
-
-      // Find test files
-      const testFiles = this.findTestFiles(filePath);
-      for (const testFile of testFiles) {
-        if (!filePaths.includes(testFile)) {
-          // If already in map as 'import' or 'importer', upgrade to 'test' if closer
-          if (!allRelated.has(testFile)) {
-            allRelated.set(testFile, { path: testFile, relation: 'test', hops: 0 });
-          } else if (allRelated.get(testFile)!.relation !== 'test') {
-            // Test files are more specific, so upgrade relation type
-            allRelated.get(testFile)!.relation = 'test';
-          }
-        }
-      }
-
-      // Find config files
-      const configFiles = this.findConfigFilesReferencing(filePath);
-      for (const configFile of configFiles) {
-        if (!allRelated.has(configFile) && !filePaths.includes(configFile)) {
-          allRelated.set(configFile, { path: configFile, relation: 'config', hops: 0 });
-        }
-      }
+      this.collectImportRelations(filePath, maxHops, allRelated);
+      this.collectTestFiles(filePath, fileSet, allRelated);
+      this.collectConfigFiles(filePath, fileSet, allRelated);
     }
 
-    // Find shared utilities
-    const sharedUtilities = this.findSharedUtilities(filePaths);
-    for (const utility of sharedUtilities) {
-      if (!allRelated.has(utility) && !filePaths.includes(utility)) {
+    this.collectSharedUtilities(filePaths, fileSet, allRelated);
+
+    return Array.from(allRelated.values());
+  }
+
+  private collectImportRelations(
+    filePath: string,
+    maxHops: number,
+    allRelated: Map<string, RelatedFile>,
+  ): void {
+    for (const related of this.findRelatedFiles(filePath, maxHops)) {
+      if (!allRelated.has(related.path) || allRelated.get(related.path)!.hops > related.hops) {
+        allRelated.set(related.path, related);
+      }
+    }
+  }
+
+  private collectTestFiles(
+    filePath: string,
+    fileSet: Set<string>,
+    allRelated: Map<string, RelatedFile>,
+  ): void {
+    for (const testFile of this.findTestFiles(filePath)) {
+      if (fileSet.has(testFile)) continue;
+      if (!allRelated.has(testFile)) {
+        allRelated.set(testFile, { path: testFile, relation: 'test', hops: 0 });
+      } else if (allRelated.get(testFile)!.relation !== 'test') {
+        allRelated.get(testFile)!.relation = 'test';
+      }
+    }
+  }
+
+  private collectConfigFiles(
+    filePath: string,
+    fileSet: Set<string>,
+    allRelated: Map<string, RelatedFile>,
+  ): void {
+    for (const configFile of this.findConfigFilesReferencing(filePath)) {
+      if (!fileSet.has(configFile) && !allRelated.has(configFile)) {
+        allRelated.set(configFile, { path: configFile, relation: 'config', hops: 0 });
+      }
+    }
+  }
+
+  private collectSharedUtilities(
+    filePaths: string[],
+    fileSet: Set<string>,
+    allRelated: Map<string, RelatedFile>,
+  ): void {
+    for (const utility of this.findSharedUtilities(filePaths)) {
+      if (!fileSet.has(utility) && !allRelated.has(utility)) {
         allRelated.set(utility, { path: utility, relation: 'utility', hops: 0 });
       }
     }
-
-    return Array.from(allRelated.values());
   }
 }
