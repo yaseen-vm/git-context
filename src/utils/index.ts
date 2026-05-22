@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 
 export interface FileChange {
@@ -112,4 +113,23 @@ export function truncateContent(content: string, maxLength: number = 50000): str
 export function formatTokenCount(count: number): string {
   if (count < 1000) return `${count} tokens`;
   return `${(count / 1000).toFixed(1)}k tokens`;
+}
+
+export function findConfigFile(repoPath: string, candidates: string[]): string | null {
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(repoPath, candidate))) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+export function readJsonFile(filePath: string): unknown {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse JSON file ${filePath}: ${message}`, { cause: error });
+  }
 }

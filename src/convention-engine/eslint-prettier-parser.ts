@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { findConfigFile } from '../utils/index.js';
 import type { ESLintConfig, PrettierConfig } from './types.js';
 
 const ESLINT_CONFIG_FILES = [
@@ -314,15 +315,6 @@ function extractPrettierInfo(configFile: string, options: Record<string, unknown
     trailingComma: typeof options.trailingComma === 'string' ? options.trailingComma : null,
     printWidth: typeof options.printWidth === 'number' ? options.printWidth : null,
   };
-}
-
-function findConfigFile(repoPath: string, candidates: string[]): string | null {
-  for (const candidate of candidates) {
-    if (fs.existsSync(path.join(repoPath, candidate))) {
-      return candidate;
-    }
-  }
-  return null;
 }
 
 export function summarizeESLintConfig(config: ESLintConfig | null): string[] {

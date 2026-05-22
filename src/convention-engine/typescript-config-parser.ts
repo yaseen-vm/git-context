@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { findConfigFile } from '../utils/index.js';
 import type { TypeScriptConfig } from './types.js';
 
 const TSCONFIG_FILES = ['tsconfig.json', 'jsconfig.json'];
@@ -23,15 +24,6 @@ export function parseTypeScriptConfig(repoPath: string): TypeScriptConfig | null
   }
 
   return extractTypeScriptInfo(configFile, config);
-}
-
-function findConfigFile(repoPath: string, candidates: string[]): string | null {
-  for (const candidate of candidates) {
-    if (fs.existsSync(path.join(repoPath, candidate))) {
-      return candidate;
-    }
-  }
-  return null;
 }
 
 function createDefaultTypeScriptConfig(configFile: string): TypeScriptConfig {
