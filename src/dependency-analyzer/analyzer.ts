@@ -130,21 +130,123 @@ export class DependencyAnalyzer {
   }
 
   private resolveModule(moduleSpecifier: string, sourceFile: SourceFile): string | null {
-    if (!moduleSpecifier.startsWith('.') && !moduleSpecifier.startsWith('/')) {
+    const sourceDir = path.dirname(sourceFile.getFilePath());
+
+    // Handle relative imports (./foo, ../bar)
+    if (moduleSpecifier.startsWith('.')) {
+      return this.resolveRelativeImport(moduleSpecifier, sourceDir);
+    }
+
+    // Handle absolute imports (tsconfig paths like @/foo)
+    if (this.isPathAlias(moduleSpecifier)) {
+      return this.resolvePathAlias(moduleSpecifier);
+    }
+
+    // Handle absolute path imports
+    if (moduleSpecifier.startsWith('/')) {
+      return this.resolveAbsoluteImport(moduleSpecifier);
+    }
+
+    // External module (node_modules)
+    return null;
+  }
+
+  private resolveRelativeImport(moduleSpecifier: string, sourceDir: string): string | null {
+    const resolved = path.resolve(sourceDir, moduleSpecifier);
+    const relativePath = path.relative(this.repoPath, resolved).replace(/\\/g, '/');
+    return this.resolveFilePath(relativePath);
+  }
+
+  private resolveAbsoluteImport(moduleSpecifier: string): string | null {
+    const relativePath = path.relative(this.repoPath, moduleSpecifier).replace(/\\/g, '/');
+    return this.resolveFilePath(relativePath);
+  }
+
+  private isPathAlias(moduleSpecifier: string): boolean {
+    // Check if the project has tsconfig with paths
+    if (!this.hasTsConfig) return false;
+
+    try {
+      const tsConfigPath = path.join(this.repoPath, 'tsconfig.json');
+      const jsConfigPath = path.join(this.repoPath, 'jsconfig.json');
+
+      let configPath = tsConfigPath;
+      if (!require('fs').existsSync(tsConfigPath) && require('fs').existsSync(jsConfigPath)) {
+        configPath = jsConfigPath;
+      }
+
+      if (!require('fs').existsSync(configPath)) return false;
+
+      const config = JSON.parse(require('fs').readFileSync(configPath, 'utf-8'));
+      const paths = config.compilerOptions?.paths;
+
+      if (!paths) return false;
+
+      // Check if moduleSpecifier matches any path alias
+      for (const alias of Object.keys(paths)) {
+        const prefix = alias.replace(/\*$/, '');
+        if (moduleSpecifier.startsWith(prefix)) {
+          return true;
+        }
+      }
+    } catch {
+      return false;
+    }
+
+    return false;
+  }
+
+  private resolvePathAlias(moduleSpecifier: string): string | null {
+    try {
+      const tsConfigPath = path.join(this.repoPath, 'tsconfig.json');
+      const jsConfigPath = path.join(this.repoPath, 'jsconfig.json');
+
+      let configPath = tsConfigPath;
+      if (!require('fs').existsSync(tsConfigPath) && require('fs').existsSync(jsConfigPath)) {
+        configPath = jsConfigPath;
+      }
+
+      if (!require('fs').existsSync(configPath)) return null;
+
+      const config = JSON.parse(require('fs').readFileSync(configPath, 'utf-8'));
+      const paths = config.compilerOptions?.paths;
+
+      if (!paths) return null;
+
+      for (const [alias, targets] of Object.entries(paths)) {
+        const prefix = alias.replace(/\*$/, '');
+        if (moduleSpecifier.startsWith(prefix)) {
+          const suffix = moduleSpecifier.slice(prefix.length);
+          const target = (targets as string[])[0];
+          if (target) {
+            const resolvedPath = target.replace(/\*$/, suffix);
+            const relativePath = path
+              .relative(this.repoPath, path.resolve(this.repoPath, resolvedPath))
+              .replace(/\\/g, '/');
+            return this.resolveFilePath(relativePath);
+          }
+        }
+      }
+    } catch {
       return null;
     }
 
-    const sourceDir = path.dirname(sourceFile.getFilePath());
-    const resolved = path.resolve(sourceDir, moduleSpecifier);
-    const relativePath = path.relative(this.repoPath, resolved).replace(/\\/g, '/');
+    return null;
+  }
 
+  private resolveFilePath(relativePath: string): string | null {
     const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
     const indexFiles = extensions.map((ext) => `/index${ext}`);
 
+    // If path already has extension, check if it exists
     if (path.extname(relativePath)) {
-      return relativePath;
+      if (this.fileExists(relativePath)) {
+        return relativePath;
+      }
+      return null;
     }
 
+    // Try adding extensions
     for (const ext of extensions) {
       const withExt = `${relativePath}${ext}`;
       if (this.fileExists(withExt)) {
@@ -152,6 +254,7 @@ export class DependencyAnalyzer {
       }
     }
 
+    // Try index files
     for (const indexFile of indexFiles) {
       const indexPath = `${relativePath}${indexFile}`;
       if (this.fileExists(indexPath)) {
@@ -159,7 +262,7 @@ export class DependencyAnalyzer {
       }
     }
 
-    return relativePath;
+    return null;
   }
 
   private fileExists(filePath: string): boolean {

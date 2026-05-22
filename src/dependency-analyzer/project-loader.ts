@@ -71,7 +71,9 @@ export function addSourceFiles(
 
       const content = fs.readFileSync(absolutePath, 'utf-8');
       const relativePath = path.relative(repoPath, absolutePath).replace(/\\/g, '/');
-      const sourceFile = project.createSourceFile(relativePath, content, {
+
+      // Use absolute path for ts-morph to ensure correct resolution
+      const sourceFile = project.createSourceFile(absolutePath, content, {
         overwrite: true,
       });
       sourceFiles.push({ sourceFile, relativePath });

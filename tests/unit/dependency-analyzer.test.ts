@@ -71,4 +71,140 @@ describe('DependencyAnalyzer', () => {
       expect(analyses[0].filePath).toBe('src/index.js');
     });
   });
+
+  describe('Issue #12: import resolution', () => {
+    it('should resolve relative imports', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src', 'utils'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'utils', 'helper.ts'),
+        'export const helper = () => {};',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.ts'),
+        'import { helper } from "./utils/helper"; export const main = helper;',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      const analyses = analyzer.analyzeFiles(['src/index.ts', 'src/utils/helper.ts']);
+
+      const indexAnalysis = analyses.find((a) => a.filePath === 'src/index.ts');
+      expect(indexAnalysis).toBeDefined();
+      expect(indexAnalysis!.imports).toHaveLength(1);
+      expect(indexAnalysis!.imports[0].resolvedPath).toBe('src/utils/helper.ts');
+      expect(indexAnalysis!.imports[0].namedImports).toContain('helper');
+    });
+
+    it('should resolve relative imports with index files', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src', 'utils'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'utils', 'index.ts'),
+        'export { helper } from "./helper"; export const utils = {};',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'utils', 'helper.ts'),
+        'export const helper = () => {};',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.ts'),
+        'import { utils } from "./utils"; export const main = utils;',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      const analyses = analyzer.analyzeFiles([
+        'src/index.ts',
+        'src/utils/index.ts',
+        'src/utils/helper.ts',
+      ]);
+
+      const indexAnalysis = analyses.find((a) => a.filePath === 'src/index.ts');
+      expect(indexAnalysis).toBeDefined();
+      expect(indexAnalysis!.imports).toHaveLength(1);
+      expect(indexAnalysis!.imports[0].resolvedPath).toBe('src/utils/index.ts');
+    });
+
+    it('should resolve imports with different extensions', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'component.tsx'),
+        'export const Component = () => {};',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.ts'),
+        'import { Component } from "./component"; export const App = Component;',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      const analyses = analyzer.analyzeFiles(['src/index.ts', 'src/component.tsx']);
+
+      const indexAnalysis = analyses.find((a) => a.filePath === 'src/index.ts');
+      expect(indexAnalysis).toBeDefined();
+      expect(indexAnalysis!.imports[0].resolvedPath).toBe('src/component.tsx');
+    });
+
+    it('should resolve path aliases from tsconfig', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: {
+            target: 'ES2022',
+            module: 'ES2022',
+            moduleResolution: 'node',
+            paths: { '@/*': ['./src/*'] },
+          },
+        }),
+      );
+      fs.writeFileSync(path.join(tmpDir, 'src', 'utils.ts'), 'export const utils = {};');
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.ts'),
+        'import { utils } from "@/utils"; export const main = utils;',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      const analyses = analyzer.analyzeFiles(['src/index.ts', 'src/utils.ts']);
+
+      const indexAnalysis = analyses.find((a) => a.filePath === 'src/index.ts');
+      expect(indexAnalysis).toBeDefined();
+      expect(indexAnalysis!.imports[0].resolvedPath).toBe('src/utils.ts');
+    });
+
+    it('should handle re-exports and barrel files', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src', 'components'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'components', 'Button.tsx'),
+        'export const Button = () => {};',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'components', 'index.ts'),
+        'export { Button } from "./Button";',
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.ts'),
+        'import { Button } from "./components"; export const App = Button;',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      const analyses = analyzer.analyzeFiles([
+        'src/index.ts',
+        'src/components/index.ts',
+        'src/components/Button.tsx',
+      ]);
+
+      const componentsIndex = analyses.find((a) => a.filePath === 'src/components/index.ts');
+      expect(componentsIndex).toBeDefined();
+      expect(componentsIndex!.reExports).toHaveLength(1);
+      expect(componentsIndex!.reExports[0].namedExports).toContain('Button');
+    });
+
+    it('should not resolve external modules', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', 'index.ts'),
+        'import React from "react"; export const App = React;',
+      );
+
+      analyzer = new DependencyAnalyzer(tmpDir);
+      const analyses = analyzer.analyzeFiles(['src/index.ts']);
+
+      const indexAnalysis = analyses[0];
+      expect(indexAnalysis.imports[0].resolvedPath).toBeNull();
+    });
+  });
 });
