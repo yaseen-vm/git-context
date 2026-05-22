@@ -417,4 +417,155 @@ export class DependencyAnalyzer {
 
     return cycles;
   }
+
+  findTestFiles(filePath: string): string[] {
+    const testPatterns = [
+      // foo.ts -> foo.test.ts, foo.spec.ts
+      (p: string) => p.replace(/\.tsx?$/, '.test.ts'),
+      (p: string) => p.replace(/\.tsx?$/, '.test.tsx'),
+      (p: string) => p.replace(/\.tsx?$/, '.spec.ts'),
+      (p: string) => p.replace(/\.tsx?$/, '.spec.tsx'),
+      (p: string) => p.replace(/\.jsx?$/, '.test.js'),
+      (p: string) => p.replace(/\.jsx?$/, '.test.jsx'),
+      (p: string) => p.replace(/\.jsx?$/, '.spec.js'),
+      (p: string) => p.replace(/\.jsx?$/, '.spec.jsx'),
+      // src/foo.ts -> src/__tests__/foo.test.ts
+      (p: string) => {
+        const dir = path.dirname(p);
+        const base = path.basename(p);
+        return path.join(dir, '__tests__', base).replace(/\.tsx?$/, '.test.ts');
+      },
+      // src/foo.ts -> tests/foo.test.ts
+      (p: string) => {
+        const base = path.basename(p);
+        return path.join('tests', base).replace(/\.tsx?$/, '.test.ts');
+      },
+    ];
+
+    const testFiles: string[] = [];
+    for (const pattern of testPatterns) {
+      const testPath = pattern(filePath);
+      if (this.fileExists(testPath) && !testFiles.includes(testPath)) {
+        testFiles.push(testPath);
+      }
+    }
+
+    return testFiles;
+  }
+
+  findConfigFilesReferencing(filePath: string): string[] {
+    const configPatterns = [
+      'tsconfig.json',
+      'jsconfig.json',
+      '.eslintrc.json',
+      '.eslintrc.js',
+      '.eslintrc.yml',
+      '.eslintrc.yaml',
+      'eslint.config.js',
+      'eslint.config.mjs',
+      '.prettierrc',
+      '.prettierrc.json',
+      'prettier.config.js',
+      'jest.config.js',
+      'jest.config.ts',
+      'vitest.config.ts',
+      'vitest.config.js',
+      'webpack.config.js',
+      'webpack.config.ts',
+      'vite.config.ts',
+      'vite.config.js',
+      'rollup.config.js',
+      'rollup.config.ts',
+    ];
+
+    const configFiles: string[] = [];
+    const baseName = path.basename(filePath);
+
+    for (const configPath of configPatterns) {
+      if (this.fileExists(configPath)) {
+        try {
+          const absolutePath = path.resolve(this.repoPath, configPath);
+          const content = require('fs').readFileSync(absolutePath, 'utf-8');
+          if (content.includes(baseName) || content.includes(filePath)) {
+            configFiles.push(configPath);
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    return configFiles;
+  }
+
+  findSharedUtilities(filePaths: string[]): string[] {
+    const allImports = new Set<string>();
+    const fileSet = new Set(filePaths);
+
+    for (const filePath of filePaths) {
+      const imports = this.getImportsOf(filePath);
+      for (const imp of imports) {
+        if (!fileSet.has(imp)) {
+          allImports.add(imp);
+        }
+      }
+    }
+
+    const sharedUtilities: string[] = [];
+    for (const imp of allImports) {
+      const importers = this.getImportersOf(imp);
+      const importersInFiles = Array.from(importers).filter((i) => fileSet.has(i));
+      if (importersInFiles.length >= 2) {
+        sharedUtilities.push(imp);
+      }
+    }
+
+    return sharedUtilities;
+  }
+
+  findAllRelatedFiles(filePaths: string[], maxHops: number = 2): RelatedFile[] {
+    const allRelated = new Map<string, RelatedFile>();
+
+    for (const filePath of filePaths) {
+      // Find import-related files
+      const importRelated = this.findRelatedFiles(filePath, maxHops);
+      for (const related of importRelated) {
+        if (!allRelated.has(related.path) || allRelated.get(related.path)!.hops > related.hops) {
+          allRelated.set(related.path, related);
+        }
+      }
+
+      // Find test files
+      const testFiles = this.findTestFiles(filePath);
+      for (const testFile of testFiles) {
+        if (!filePaths.includes(testFile)) {
+          // If already in map as 'import' or 'importer', upgrade to 'test' if closer
+          if (!allRelated.has(testFile)) {
+            allRelated.set(testFile, { path: testFile, relation: 'test', hops: 0 });
+          } else if (allRelated.get(testFile)!.relation !== 'test') {
+            // Test files are more specific, so upgrade relation type
+            allRelated.get(testFile)!.relation = 'test';
+          }
+        }
+      }
+
+      // Find config files
+      const configFiles = this.findConfigFilesReferencing(filePath);
+      for (const configFile of configFiles) {
+        if (!allRelated.has(configFile) && !filePaths.includes(configFile)) {
+          allRelated.set(configFile, { path: configFile, relation: 'config', hops: 0 });
+        }
+      }
+    }
+
+    // Find shared utilities
+    const sharedUtilities = this.findSharedUtilities(filePaths);
+    for (const utility of sharedUtilities) {
+      if (!allRelated.has(utility) && !filePaths.includes(utility)) {
+        allRelated.set(utility, { path: utility, relation: 'utility', hops: 0 });
+      }
+    }
+
+    return Array.from(allRelated.values());
+  }
 }
