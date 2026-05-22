@@ -20,16 +20,27 @@ import type { PatternDetectionResult } from './pattern-detector.js';
 
 export class ArchitectureEngine {
   private repoPath: string;
+  private cachedFolderStructure: FolderStructure | null = null;
+  private cachedDocumentation: DocumentationAnalysis | null = null;
+  private cachedServiceMap: ServiceMap | null = null;
+  private cachedPatterns: PatternDetectionResult | null = null;
 
   constructor(repoPath: string = process.cwd()) {
     this.repoPath = repoPath;
   }
 
+  invalidateCache(): void {
+    this.cachedFolderStructure = null;
+    this.cachedDocumentation = null;
+    this.cachedServiceMap = null;
+    this.cachedPatterns = null;
+  }
+
   analyze(): ArchitectureAnalysisResult {
-    const folderStructure = analyzeFolderStructure(this.repoPath);
-    const documentation = analyzeDocumentation(this.repoPath);
-    const serviceMap = analyzeServiceRelationships(this.repoPath);
-    const patterns = detectPatterns(this.repoPath);
+    const folderStructure = this.getFolderStructure();
+    const documentation = this.getDocumentation();
+    const serviceMap = this.getServiceMap();
+    const patterns = this.getPatterns();
     const summary: string[] = [];
 
     summary.push('## Folder Structure');
@@ -64,39 +75,49 @@ export class ArchitectureEngine {
   }
 
   getFolderStructure(): FolderStructure {
-    return analyzeFolderStructure(this.repoPath);
+    if (!this.cachedFolderStructure) {
+      this.cachedFolderStructure = analyzeFolderStructure(this.repoPath);
+    }
+    return this.cachedFolderStructure;
   }
 
   getModuleBoundaries(): ModuleBoundary[] {
-    const structure = analyzeFolderStructure(this.repoPath);
-    return structure.moduleBoundaries;
+    return this.getFolderStructure().moduleBoundaries;
   }
 
   getEntryPoints(): EntryPoint[] {
-    const structure = analyzeFolderStructure(this.repoPath);
-    return structure.entryPoints;
+    return this.getFolderStructure().entryPoints;
   }
 
   getDirectoryTree(maxDepth: number = 3): string[] {
-    const structure = analyzeFolderStructure(this.repoPath);
+    const structure = this.getFolderStructure();
     return generateDirectoryTree(structure.tree, this.repoPath, maxDepth);
   }
 
   getDocumentation(): DocumentationAnalysis {
-    return analyzeDocumentation(this.repoPath);
+    if (!this.cachedDocumentation) {
+      this.cachedDocumentation = analyzeDocumentation(this.repoPath);
+    }
+    return this.cachedDocumentation;
   }
 
   getServiceMap(): ServiceMap {
-    return analyzeServiceRelationships(this.repoPath);
+    if (!this.cachedServiceMap) {
+      this.cachedServiceMap = analyzeServiceRelationships(this.repoPath);
+    }
+    return this.cachedServiceMap;
   }
 
   getServiceDependencyGraph(): string[] {
-    const serviceMap = analyzeServiceRelationships(this.repoPath);
+    const serviceMap = this.getServiceMap();
     return getServiceDependencyGraph(serviceMap.services);
   }
 
   getPatterns(): PatternDetectionResult {
-    return detectPatterns(this.repoPath);
+    if (!this.cachedPatterns) {
+      this.cachedPatterns = detectPatterns(this.repoPath);
+    }
+    return this.cachedPatterns;
   }
 
   getSummary(): string[] {
