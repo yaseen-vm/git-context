@@ -1,6 +1,6 @@
 {
   "name": "@yaseen-vm/git-context",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "CLI tool that gathers and structures repository context for AI-powered code reviews",
   "type": "module",
   "main": "dist/index.js",
