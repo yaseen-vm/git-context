@@ -2,6 +2,7 @@ import { GitEngine, GitDiff } from '../../git-engine/index.js';
 import { PromptBuilder, PromptBuilderOptions } from '../../prompt-builder/index.js';
 import { ConventionEngine } from '../../convention-engine/index.js';
 import { DependencyAnalyzer } from '../../dependency-analyzer/index.js';
+import { ArchitectureEngine } from '../../architecture-engine/index.js';
 import {
   OutputFormat,
   ReviewFocus,
@@ -153,13 +154,20 @@ async function buildReviewContext(
     status: file.status,
     additions: file.additions,
     deletions: file.deletions,
+    diff: file.diff || undefined,
   }));
 
   const history: ReviewContext['history'] = [];
   if (options.history !== false) {
+    const seen = new Set<string>();
     for (const file of result.diff.files.slice(0, 5)) {
       const commits = await gitEngine.getRecentCommits(file.path, 3);
-      history.push(...commits);
+      for (const commit of commits) {
+        if (!seen.has(commit.hash)) {
+          seen.add(commit.hash);
+          history.push(commit);
+        }
+      }
     }
   }
 
@@ -188,11 +196,16 @@ async function buildReviewContext(
     };
   }
 
+  const archEngine = new ArchitectureEngine(process.cwd());
+  const archResult = await archEngine.analyze();
+  const patterns = archResult.folderStructure?.moduleBoundaries?.map((m) => m.name) ?? [];
+  const structure = archResult.summary?.slice(0, 8) ?? [];
+
   return {
     changes,
     relatedFiles,
     history,
     conventions,
-    architecture: { structure: [], frameworks: [], patterns: [] },
+    architecture: { structure, frameworks: [], patterns },
   };
 }

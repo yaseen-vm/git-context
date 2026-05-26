@@ -64,6 +64,7 @@ export interface FileChange {
   status: 'added' | 'modified' | 'deleted' | 'renamed';
   additions: number;
   deletions: number;
+  diff?: string;
 }
 
 export interface ReviewContext {
