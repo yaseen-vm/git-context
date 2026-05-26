@@ -23,7 +23,19 @@
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run lint && npm run typecheck && npm run test:run && npm run build"
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run test:run && npm run build",
+    "build:binaries": "npm run build && pkg . --out-path binaries"
+  },
+  "pkg": {
+    "scripts": "dist/**/*.js",
+    "assets": [],
+    "targets": [
+      "node20-linux-x64",
+      "node20-macos-x64",
+      "node20-macos-arm64",
+      "node20-win-x64"
+    ],
+    "outputPath": "binaries"
   },
   "keywords": [
     "git",
@@ -35,6 +47,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@yao-pkg/pkg": "^5.12.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.9.1",
     "@typescript-eslint/eslint-plugin": "^8.59.4",
