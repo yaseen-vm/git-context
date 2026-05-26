@@ -37,11 +37,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build TypeScript
-        run: npm run build
+      - name: Bundle to CJS
+        run: npm run build:bundle
 
       - name: Build binary (${{ matrix.target }})
-        run: npx pkg . --target node20-${{ matrix.target }} --output binaries/${{ matrix.asset_name }}
+        run: npx pkg dist-bundle/cli.cjs --target node20-${{ matrix.target }} --output binaries/${{ matrix.asset_name }}
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
