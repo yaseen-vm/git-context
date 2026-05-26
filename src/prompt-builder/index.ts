@@ -334,32 +334,115 @@ export class PromptBuilder {
     return JSON.stringify(output, null, 2);
   }
 
-  private buildAIPrompt(context: ReviewContext, focus?: ReviewFocus): string {
-    const parts: string[] = [];
-    const preamble =
+  private buildSystemSection(context: ReviewContext, focus?: ReviewFocus): string {
+    const lines: string[] = [];
+    const role =
       this.template.systemPreamble ??
-      'You are an expert code reviewer. Analyze the following code changes and provide feedback.';
+      'You are an expert code reviewer. Your job is to identify real problems, not nitpick style.';
 
-    parts.push(`${preamble}\n`);
+    lines.push(role);
+    lines.push('');
 
-    if (focus) {
-      parts.push(`Focus specifically on: **${focus}**\n`);
+    if (context.conventions) {
+      const convSummary = this.summarizeConventions(context.conventions);
+      if (convSummary.length > 0) {
+        lines.push('## Repository Conventions');
+        lines.push(...convSummary);
+        lines.push('');
+      }
     }
 
-    parts.push('## Changed Files\n');
-    for (const change of context.changes) {
-      parts.push(`### ${change.path}`);
-      parts.push(`Status: ${change.status} | +${change.additions} -${change.deletions}`);
-      if (change.diff) {
-        parts.push('```diff');
-        parts.push(change.diff.trim());
-        parts.push('```');
+    if (context.architecture) {
+      const { frameworks, patterns, structure } = context.architecture;
+      if (frameworks.length > 0 || patterns.length > 0 || structure.length > 0) {
+        lines.push('## Architecture');
+        if (frameworks.length > 0) lines.push(`Frameworks: ${frameworks.join(', ')}`);
+        if (patterns.length > 0) lines.push(`Patterns: ${patterns.join(', ')}`);
+        if (structure.length > 0) lines.push(`Structure: ${structure.slice(0, 5).join(', ')}`);
+        lines.push('');
       }
-      parts.push('');
+    }
+
+    if (focus) {
+      lines.push(`Review focus: **${focus}**`);
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  }
+
+  private getFocusChecklist(focus?: ReviewFocus): string[] {
+    const checklists: Record<ReviewFocus, string[]> = {
+      security: [
+        'Check for: SQL/command/path injection vulnerabilities',
+        'Check for: authentication and authorisation bypass',
+        'Check for: secret or credential exposure in code or logs',
+        'Check for: insecure deserialization and prototype pollution',
+        'Check for: SSRF and open-redirect risks',
+        'Check for: missing input validation at trust boundaries',
+      ],
+      performance: [
+        'Check for: N+1 queries or repeated DB calls in loops',
+        'Check for: synchronous I/O in async hot paths',
+        'Check for: unbounded loops or quadratic complexity',
+        'Check for: memory leaks (event listeners, closures, caches without eviction)',
+        'Check for: missing caching for expensive computed values',
+        'Check for: unnecessary re-renders or redundant work',
+      ],
+      architecture: [
+        'Evaluate module boundary violations (layer leakage)',
+        'Evaluate separation of concerns — is logic in the right layer?',
+        'Evaluate dependency direction — no circular or upward imports',
+        'Evaluate cohesion — does each module have a single clear responsibility?',
+        'Evaluate coupling — are components unnecessarily tied to implementation details?',
+      ],
+      bug: [
+        'Check for: off-by-one errors and boundary conditions',
+        'Check for: missing null/undefined guards',
+        'Check for: incorrect boolean logic or operator precedence',
+        'Check for: unhandled promise rejections or missing await',
+        'Check for: race conditions in async code',
+        'Check for: error paths that silently swallow failures',
+      ],
+      refactor: [
+        'Identify duplication that should be extracted',
+        'Identify overly complex conditionals that can be simplified',
+        'Identify names that do not reflect current intent',
+        'Identify abstraction opportunities (DRY, SOLID)',
+        'Identify dead code or redundant state',
+      ],
+    };
+    return focus ? checklists[focus] : [];
+  }
+
+  private buildAIPrompt(context: ReviewContext, focus?: ReviewFocus): string {
+    const parts: string[] = [];
+
+    // SYSTEM section: role + conventions + architecture
+    parts.push('<system>');
+    parts.push(this.buildSystemSection(context, focus).trim());
+    parts.push('</system>');
+    parts.push('');
+
+    // CONTEXT section: diffs + related files + history
+    parts.push('<context>');
+    parts.push('');
+
+    if (context.changes.length > 0) {
+      parts.push('## Changed Files\n');
+      for (const change of context.changes) {
+        parts.push(`### ${change.path} (${change.status}, +${change.additions}, -${change.deletions})`);
+        if (change.diff) {
+          parts.push('```diff');
+          parts.push(change.diff.trim());
+          parts.push('```');
+        }
+        parts.push('');
+      }
     }
 
     if (context.relatedFiles.length > 0) {
-      parts.push('## Related Files for Context\n');
+      parts.push('## Related Files\n');
       for (const file of context.relatedFiles) {
         parts.push(`### ${file.path}`);
         parts.push(`_${file.reason}_\n`);
@@ -374,26 +457,40 @@ export class PromptBuilder {
     }
 
     if (context.history.length > 0) {
-      parts.push('## Recent Changes to These Files\n');
+      parts.push('## Recent History\n');
       for (const commit of context.history.slice(0, 5)) {
-        parts.push(`- ${commit.message} (${commit.author})`);
+        parts.push(`- ${commit.hash.slice(0, 7)} ${commit.message} (${commit.author})`);
       }
       parts.push('');
     }
 
-    if (context.conventions) {
-      const convSummary = this.summarizeConventions(context.conventions);
-      if (convSummary.length > 0) {
-        parts.push('## Team Conventions\n');
-        for (const conv of convSummary) {
-          parts.push(`- ${conv}`);
-        }
-        parts.push('');
+    parts.push('</context>');
+    parts.push('');
+
+    // TASK section: what to review + output format instructions
+    parts.push('<task>');
+    parts.push('');
+    parts.push(this.getTaskDescription(focus));
+    parts.push('');
+
+    const checklist = this.getFocusChecklist(focus);
+    if (checklist.length > 0) {
+      parts.push('**Checklist:**');
+      for (const item of checklist) {
+        parts.push(`- [ ] ${item}`);
       }
+      parts.push('');
     }
 
-    parts.push('## Your Task\n');
-    parts.push(this.getTaskDescription(focus));
+    parts.push('**Output format:** Respond as a numbered list. For each issue found:');
+    parts.push('1. Location: file path and line number (if known)');
+    parts.push('2. Severity: P0 (critical/data-loss), P1 (bug/security), P2 (warning/smell)');
+    parts.push('3. Explanation: what the problem is and why it matters');
+    parts.push('4. Suggested fix: concrete code or approach');
+    parts.push('');
+    parts.push('If no issues are found, say so explicitly.');
+    parts.push('');
+    parts.push('</task>');
 
     return parts.join('\n');
   }

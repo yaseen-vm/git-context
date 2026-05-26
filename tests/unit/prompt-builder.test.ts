@@ -338,34 +338,36 @@ describe('PromptBuilder — prompt format', () => {
   it('includes related files section', async () => {
     const builder = new PromptBuilder({ format: 'prompt' });
     const result = await builder.buildPrompt(baseContext);
-    expect(result.content).toContain('## Related Files for Context');
+    expect(result.content).toContain('## Related Files');
     expect(result.content).toContain('src/auth/middleware.ts');
   });
 
-  it('includes recent changes section capped at 5 commits', async () => {
+  it('includes recent history section capped at 5 commits', async () => {
     const manyCommits = Array.from({ length: 10 }, (_, i) => ({
-      hash: `hash${i}`, date: '2026-01-01', message: `commit ${i}`, author: 'dev',
+      hash: `hash${i}abcdef`, date: '2026-01-01', message: `commit ${i}`, author: 'dev',
     }));
     const ctx = { ...baseContext, history: manyCommits };
     const builder = new PromptBuilder({ format: 'prompt' });
     const result = await builder.buildPrompt(ctx);
-    expect(result.content).toContain('## Recent Changes to These Files');
-    expect((result.content.match(/- commit/g) ?? []).length).toBe(5);
+    expect(result.content).toContain('## Recent History');
+    expect((result.content.match(/- \w{7} commit/g) ?? []).length).toBe(5);
   });
 
-  it('includes conventions with real values', async () => {
+  it('includes conventions with real values inside <system> block', async () => {
     const builder = new PromptBuilder({ format: 'prompt' });
     const result = await builder.buildPrompt(baseContext);
-    expect(result.content).toContain('## Team Conventions');
+    expect(result.content).toContain('<system>');
+    expect(result.content).toContain('## Repository Conventions');
     expect(result.content).toContain('**TypeScript**');
     expect(result.content).toContain('target: ES2022');
   });
 
-  it('includes ## Your Task with focus-specific instructions', async () => {
+  it('includes <task> block with focus-specific instructions', async () => {
     const builder = new PromptBuilder({ format: 'prompt', focus: 'security' });
     const result = await builder.buildPrompt(baseContext);
-    expect(result.content).toContain('## Your Task');
+    expect(result.content).toContain('<task>');
     expect(result.content).toMatch(/security/i);
+    expect(result.content).toContain('P0');
   });
 
   it('emits focus line when focus is set', async () => {
