@@ -1,4 +1,3 @@
-import path from 'path';
 import type { MonorepoInfo, WorkspacePackage } from './types.js';
 
 export interface ScopeResult {
