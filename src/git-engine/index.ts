@@ -135,13 +135,32 @@ export class GitEngine {
     if (base !== undefined) {
       this.validateBranchName(base, 'base branch');
     }
-    const baseBranch = base || (await this.getDefaultBranch());
+    const rawBase = base || (await this.getDefaultBranch());
+    const resolvedBase = await this.resolveRef(rawBase);
     const safeBranch = branch.trim();
-    const diff = await this.git.diff([`${baseBranch}..${safeBranch}`, '--stat']);
-    const diffDetail = await this.git.diff([`${baseBranch}..${safeBranch}`]);
+    const diff = await this.git.diff([`${resolvedBase}..${safeBranch}`, '--stat']);
+    const diffDetail = await this.git.diff([`${resolvedBase}..${safeBranch}`]);
     const files = await this.parseDiff(diffDetail);
     const stats = this.parseDiffStats(diff);
     return { files, stats };
+  }
+
+  private async resolveRef(ref: string): Promise<string> {
+    // Return ref as-is if it resolves locally
+    try {
+      await this.git.raw(['rev-parse', '--verify', ref]);
+      return ref;
+    } catch {
+      // Local ref not found — try remote tracking branch
+    }
+    const remoteRef = `origin/${ref}`;
+    try {
+      await this.git.raw(['rev-parse', '--verify', remoteRef]);
+      return remoteRef;
+    } catch {
+      // Neither local nor remote ref found — return original and let git report the error
+      return ref;
+    }
   }
 
   async getDefaultBranch(): Promise<string> {
