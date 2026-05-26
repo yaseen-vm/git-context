@@ -67,9 +67,16 @@ export interface FileChange {
   diff?: string;
 }
 
+export interface RelatedFileContext {
+  path: string;
+  relation: string;
+  snippet?: string;
+  reason: string;
+}
+
 export interface ReviewContext {
   changes: FileChange[];
-  relatedFiles: string[];
+  relatedFiles: RelatedFileContext[];
   history: CommitInfo[];
   conventions: ConventionInfo;
   architecture: ArchitectureInfo;

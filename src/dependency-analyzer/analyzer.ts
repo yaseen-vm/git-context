@@ -332,6 +332,7 @@ export class DependencyAnalyzer {
           path: file,
           relation: direction,
           hops,
+          reason: this.buildReason(direction, filePath),
         });
       }
 
@@ -545,6 +546,39 @@ export class DependencyAnalyzer {
     return Array.from(allRelated.values());
   }
 
+  private buildReason(relation: RelatedFile['relation'], referrerPath?: string): string {
+    switch (relation) {
+      case 'import': return referrerPath ? `imported by ${referrerPath}` : 'imported by changed file';
+      case 'importer': return referrerPath ? `imports ${referrerPath}` : 'imports changed file';
+      case 'test': return 'test file for changed file';
+      case 'config': return 'config file referencing changed file';
+      case 'utility': return 'shared utility used by multiple changed files';
+      case 'barrel': return 'barrel re-export including changed file';
+      default: return 'related file';
+    }
+  }
+
+  private extractSnippet(relFilePath: string, maxLines: number = 30): string | undefined {
+    try {
+      const absPath = path.resolve(this.repoPath, relFilePath);
+      if (!fs.existsSync(absPath)) return undefined;
+      const content = fs.readFileSync(absPath, 'utf-8');
+      const lines = content.split('\n');
+      // For test files include only describe/it labels
+      if (/\.(test|spec)\.[jt]sx?$/.test(relFilePath)) {
+        const labels = lines
+          .filter((l) => /^\s*(describe|it|test)\(/.test(l))
+          .slice(0, maxLines)
+          .join('\n');
+        return labels || lines.slice(0, maxLines).join('\n');
+      }
+      // For other files include up to maxLines
+      return lines.slice(0, maxLines).join('\n');
+    } catch {
+      return undefined;
+    }
+  }
+
   private collectImportRelations(
     filePath: string,
     maxHops: number,
@@ -552,7 +586,11 @@ export class DependencyAnalyzer {
   ): void {
     for (const related of this.findRelatedFiles(filePath, maxHops)) {
       if (!allRelated.has(related.path) || allRelated.get(related.path)!.hops > related.hops) {
-        allRelated.set(related.path, related);
+        allRelated.set(related.path, {
+          ...related,
+          reason: this.buildReason(related.relation, filePath),
+          snippet: this.extractSnippet(related.path),
+        });
       }
     }
   }
@@ -565,7 +603,13 @@ export class DependencyAnalyzer {
     for (const testFile of this.findTestFiles(filePath)) {
       if (fileSet.has(testFile)) continue;
       if (!allRelated.has(testFile)) {
-        allRelated.set(testFile, { path: testFile, relation: 'test', hops: 0 });
+        allRelated.set(testFile, {
+          path: testFile,
+          relation: 'test',
+          hops: 0,
+          reason: this.buildReason('test', filePath),
+          snippet: this.extractSnippet(testFile),
+        });
       } else if (allRelated.get(testFile)!.relation !== 'test') {
         allRelated.get(testFile)!.relation = 'test';
       }
@@ -579,7 +623,13 @@ export class DependencyAnalyzer {
   ): void {
     for (const configFile of this.findConfigFilesReferencing(filePath)) {
       if (!fileSet.has(configFile) && !allRelated.has(configFile)) {
-        allRelated.set(configFile, { path: configFile, relation: 'config', hops: 0 });
+        allRelated.set(configFile, {
+          path: configFile,
+          relation: 'config',
+          hops: 0,
+          reason: this.buildReason('config', filePath),
+          snippet: this.extractSnippet(configFile, 20),
+        });
       }
     }
   }
@@ -591,7 +641,13 @@ export class DependencyAnalyzer {
   ): void {
     for (const utility of this.findSharedUtilities(filePaths)) {
       if (!fileSet.has(utility) && !allRelated.has(utility)) {
-        allRelated.set(utility, { path: utility, relation: 'utility', hops: 0 });
+        allRelated.set(utility, {
+          path: utility,
+          relation: 'utility',
+          hops: 0,
+          reason: this.buildReason('utility'),
+          snippet: this.extractSnippet(utility),
+        });
       }
     }
   }

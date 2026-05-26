@@ -7,7 +7,10 @@ const baseContext: ReviewContext = {
   changes: [
     { path: 'src/auth/login.ts', status: 'modified', additions: 20, deletions: 5 },
   ],
-  relatedFiles: ['src/auth/middleware.ts', 'tests/auth/login.test.ts'],
+  relatedFiles: [
+    { path: 'src/auth/middleware.ts', relation: 'import', reason: 'imported by src/auth/login.ts', snippet: 'export function requireAuth() {}' },
+    { path: 'tests/auth/login.test.ts', relation: 'test', reason: 'test file for changed file', snippet: 'describe("login", () => {})' },
+  ],
   history: [
     { hash: 'abc1234', date: '2026-05-01', message: 'Fix token validation', author: 'alice' },
     { hash: 'def5678', date: '2026-04-28', message: 'Add session refresh', author: 'bob' },
@@ -455,11 +458,15 @@ describe('PromptBuilder — token optimization', () => {
     const ctx: ReviewContext = {
       ...baseContext,
       changes: [{ path: 'src/auth/login.ts', status: 'modified', additions: 10, deletions: 2 }],
-      relatedFiles: ['src/auth/login.ts', 'src/auth/middleware.ts'],
+      relatedFiles: [
+        { path: 'src/auth/login.ts', relation: 'import', reason: 'imported by changed file' },
+        { path: 'src/auth/middleware.ts', relation: 'import', reason: 'imported by changed file' },
+      ],
     };
     const optimized = builder.optimizeContext(ctx, 10000);
-    expect(optimized.relatedFiles).not.toContain('src/auth/login.ts');
-    expect(optimized.relatedFiles).toContain('src/auth/middleware.ts');
+    const paths = optimized.relatedFiles.map((f) => f.path);
+    expect(paths).not.toContain('src/auth/login.ts');
+    expect(paths).toContain('src/auth/middleware.ts');
   });
 
   it('sorts changed files by total line impact (additions + deletions) descending', () => {
@@ -494,7 +501,11 @@ describe('PromptBuilder — token optimization', () => {
     const builder = new PromptBuilder({ format: 'markdown', maxTokens: 210 });
     const ctx: ReviewContext = {
       ...baseContext,
-      relatedFiles: Array.from({ length: 100 }, (_, i) => `src/file${i}.ts`),
+      relatedFiles: Array.from({ length: 100 }, (_, i) => ({
+        path: `src/file${i}.ts`,
+        relation: 'import' as const,
+        reason: 'imported by changed file',
+      })),
     };
     const optimized = builder.optimizeContext(ctx, 210);
     expect(optimized.relatedFiles.length).toBeLessThan(100);
