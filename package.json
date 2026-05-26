@@ -35,7 +35,11 @@
     "cli",
     "context"
   ],
-  "author": "",
+  "author": "yaseen-vm",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yaseen-vm/git-context"
+  },
   "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
