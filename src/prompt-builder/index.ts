@@ -4,6 +4,7 @@ import {
   ReviewContext,
   ConventionInfo,
   FileChange,
+  RelatedFileContext,
   truncateContent,
 } from '../utils/index.js';
 
@@ -111,7 +112,7 @@ export class PromptBuilder {
     const changedSet = new Set(context.changes.map((c) => c.path));
 
     // Deduplicate: remove related files that are already in changed files
-    const deduplicatedRelated = context.relatedFiles.filter((f) => !changedSet.has(f));
+    const deduplicatedRelated = context.relatedFiles.filter((f) => !changedSet.has(f.path));
 
     // Prioritize changed files by total line impact (additions + deletions)
     const sortedChanges = [...context.changes].sort(
@@ -128,7 +129,7 @@ export class PromptBuilder {
     const historyBudget = Math.floor(available * 0.2);
 
     const limitedChanges = this.limitChangesByTokenBudget(sortedChanges, changeBudget);
-    const limitedRelated = this.limitByTokenBudget(deduplicatedRelated, relatedBudget);
+    const limitedRelated = this.limitRelatedByTokenBudget(deduplicatedRelated, relatedBudget);
     const limitedHistory = context.history.slice(
       0,
       Math.max(1, Math.floor(historyBudget / 20)),
@@ -174,6 +175,19 @@ export class PromptBuilder {
     for (const item of items) {
       const cost = this.estimateTokens(item);
       if (used + cost > tokenBudget) break;
+      result.push(item);
+      used += cost;
+    }
+    return result;
+  }
+
+  private limitRelatedByTokenBudget(items: RelatedFileContext[], tokenBudget: number): RelatedFileContext[] {
+    const result: RelatedFileContext[] = [];
+    let used = 0;
+    for (const item of items) {
+      const content = item.snippet ?? item.path;
+      const cost = this.estimateTokens(content);
+      if (used + cost > tokenBudget && result.length > 0) break;
       result.push(item);
       used += cost;
     }
@@ -236,9 +250,16 @@ export class PromptBuilder {
           if (context.relatedFiles.length > 0) {
             sections.push('## Related Files\n');
             for (const file of context.relatedFiles) {
-              sections.push(`- ${file}`);
+              sections.push(`### ${file.path}`);
+              sections.push(`_${file.reason}_\n`);
+              if (file.snippet) {
+                const ext = file.path.split('.').pop() ?? '';
+                sections.push(`\`\`\`${ext}`);
+                sections.push(file.snippet.trim());
+                sections.push('```');
+              }
+              sections.push('');
             }
-            sections.push('');
           }
           break;
 
@@ -340,9 +361,16 @@ export class PromptBuilder {
     if (context.relatedFiles.length > 0) {
       parts.push('## Related Files for Context\n');
       for (const file of context.relatedFiles) {
-        parts.push(`- ${file}`);
+        parts.push(`### ${file.path}`);
+        parts.push(`_${file.reason}_\n`);
+        if (file.snippet) {
+          const ext = file.path.split('.').pop() ?? '';
+          parts.push(`\`\`\`${ext}`);
+          parts.push(file.snippet.trim());
+          parts.push('```');
+        }
+        parts.push('');
       }
-      parts.push('');
     }
 
     if (context.history.length > 0) {

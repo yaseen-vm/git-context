@@ -30,4 +30,6 @@ export interface RelatedFile {
   path: string;
   relation: 'import' | 'importer' | 'test' | 'config' | 'utility' | 'barrel';
   hops: number;
+  snippet?: string;
+  reason: string;
 }

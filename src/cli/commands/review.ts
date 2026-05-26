@@ -7,6 +7,7 @@ import {
   OutputFormat,
   ReviewFocus,
   ReviewContext,
+  RelatedFileContext,
   SUPPORTED_FORMATS,
   REVIEW_FOCUSES,
 } from '../../utils/index.js';
@@ -171,12 +172,18 @@ async function buildReviewContext(
     }
   }
 
-  let relatedFiles: string[] = [];
+  let relatedFiles: RelatedFileContext[] = [];
   if (options.related !== false) {
     const analyzer = new DependencyAnalyzer(process.cwd());
     const filePaths = result.diff.files.map((f) => f.path);
     analyzer.analyzeFiles(filePaths);
-    relatedFiles = analyzer.findAllRelatedFiles(filePaths).map((r) => r.path);
+    const related = analyzer.findAllRelatedFiles(filePaths);
+    relatedFiles = related.map((r) => ({
+      path: r.path,
+      relation: r.relation,
+      snippet: r.snippet,
+      reason: r.reason,
+    }));
   }
 
   let conventions: ReviewContext['conventions'] = {};
