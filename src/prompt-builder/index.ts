@@ -3,6 +3,7 @@ import {
   ReviewFocus,
   ReviewContext,
   ConventionInfo,
+  FileChange,
   truncateContent,
 } from '../utils/index.js';
 
@@ -126,10 +127,7 @@ export class PromptBuilder {
     const relatedBudget = Math.floor(available * 0.25);
     const historyBudget = Math.floor(available * 0.2);
 
-    const keptPaths = new Set(
-      this.limitByTokenBudget(sortedChanges.map((c) => c.path), changeBudget),
-    );
-    const limitedChanges = sortedChanges.filter((c) => keptPaths.has(c.path));
+    const limitedChanges = this.limitChangesByTokenBudget(sortedChanges, changeBudget);
     const limitedRelated = this.limitByTokenBudget(deduplicatedRelated, relatedBudget);
     const limitedHistory = context.history.slice(
       0,
@@ -142,6 +140,32 @@ export class PromptBuilder {
       relatedFiles: limitedRelated,
       history: limitedHistory,
     };
+  }
+
+  private limitChangesByTokenBudget(changes: FileChange[], tokenBudget: number): FileChange[] {
+    const result: FileChange[] = [];
+    let used = 0;
+    for (const change of changes) {
+      const diffLength = change.diff?.length ?? (change.additions + change.deletions) * 5;
+      const cost = this.estimateTokens(change.diff ?? ' '.repeat(diffLength));
+      if (used + cost > tokenBudget && result.length > 0) {
+        // Truncate the diff to fit remaining budget rather than dropping entirely
+        const remaining = tokenBudget - used;
+        if (remaining > 50) {
+          const maxChars = remaining * 4;
+          result.push({
+            ...change,
+            diff: change.diff
+              ? truncateContent(change.diff, maxChars)
+              : change.diff,
+          });
+        }
+        break;
+      }
+      result.push(change);
+      used += cost;
+    }
+    return result;
   }
 
   private limitByTokenBudget(items: string[], tokenBudget: number): string[] {
