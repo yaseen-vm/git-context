@@ -302,7 +302,12 @@ export class GitEngine {
     const map = new Map<string, string>();
     const sections = diffDetail.split(/^(?=diff --git )/m).filter(Boolean);
     for (const section of sections) {
-      const match = section.match(/^diff --git a\/.+ b\/(.+)/m);
+      // Use a/ (from) path as fallback for deleted files where b/ would be /dev/null
+      const isDeleted = /^deleted file mode/m.test(section);
+      const pattern = isDeleted
+        ? /^diff --git a\/(.+) b\//m
+        : /^diff --git a\/.+ b\/(.+)/m;
+      const match = section.match(pattern);
       if (match) {
         map.set(match[1].trim(), section);
       }
@@ -318,7 +323,10 @@ export class GitEngine {
       const parsedFiles = parseDiff(diffDetail);
 
       for (const file of parsedFiles) {
-        const filePath = file.to || file.from || '';
+        // Deleted files have file.to = '/dev/null'; new files have file.from = '/dev/null'
+        const filePath = file.deleted
+          ? (file.from || '')
+          : (file.to && file.to !== '/dev/null' ? file.to : file.from || '');
         let status: DiffFile['status'] = 'modified';
 
         if (file.new) {
