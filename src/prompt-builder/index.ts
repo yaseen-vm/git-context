@@ -196,10 +196,15 @@ export class PromptBuilder {
             sections.push('## Changed Files\n');
             for (const change of context.changes) {
               sections.push(
-                `- ${change.path} (${change.status}, +${change.additions}, -${change.deletions})`,
+                `### ${change.path} (${change.status}, +${change.additions}, -${change.deletions})`,
               );
+              if (change.diff) {
+                sections.push('```diff');
+                sections.push(change.diff.trim());
+                sections.push('```');
+              }
+              sections.push('');
             }
-            sections.push('');
           }
           break;
 
@@ -299,7 +304,13 @@ export class PromptBuilder {
     parts.push('## Changed Files\n');
     for (const change of context.changes) {
       parts.push(`### ${change.path}`);
-      parts.push(`Status: ${change.status} | +${change.additions} -${change.deletions}\n`);
+      parts.push(`Status: ${change.status} | +${change.additions} -${change.deletions}`);
+      if (change.diff) {
+        parts.push('```diff');
+        parts.push(change.diff.trim());
+        parts.push('```');
+      }
+      parts.push('');
     }
 
     if (context.relatedFiles.length > 0) {
