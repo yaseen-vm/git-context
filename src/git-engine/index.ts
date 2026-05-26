@@ -279,8 +279,21 @@ export class GitEngine {
     };
   }
 
+  private buildPerFileDiffMap(diffDetail: string): Map<string, string> {
+    const map = new Map<string, string>();
+    const sections = diffDetail.split(/^(?=diff --git )/m).filter(Boolean);
+    for (const section of sections) {
+      const match = section.match(/^diff --git a\/.+ b\/(.+)/m);
+      if (match) {
+        map.set(match[1].trim(), section);
+      }
+    }
+    return map;
+  }
+
   private async parseDiff(diffDetail: string): Promise<DiffFile[]> {
     const files: DiffFile[] = [];
+    const perFileDiffMap = this.buildPerFileDiffMap(diffDetail);
 
     try {
       const parsedFiles = parseDiff(diffDetail);
@@ -315,20 +328,20 @@ export class GitEngine {
           status,
           additions,
           deletions,
-          diff: diffDetail,
+          diff: perFileDiffMap.get(filePath) ?? diffDetail,
         });
       }
     } catch {
       // Fallback to simple parsing if parse-diff fails
-      const chunks = diffDetail.split(/^diff --git /m).filter(Boolean);
+      const chunks = diffDetail.split(/^(?=diff --git )/m).filter(Boolean);
 
       for (const chunk of chunks) {
         const lines = chunk.split('\n');
         const headerLine = lines[0] || '';
-        const pathMatch = headerLine.match(/a\/(.+) b\/(.+)/);
+        const pathMatch = headerLine.match(/diff --git a\/.+ b\/(.+)/);
         if (!pathMatch) continue;
 
-        const filePath = pathMatch[2];
+        const filePath = pathMatch[1].trim();
         let status: DiffFile['status'] = 'modified';
         let additions = 0;
         let deletions = 0;
