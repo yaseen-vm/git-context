@@ -350,22 +350,86 @@ export class PromptBuilder {
     const summary: string[] = [];
 
     if (conventions.typescript) {
-      summary.push('TypeScript strict mode enabled');
+      const ts = conventions.typescript as Record<string, unknown>;
+      summary.push('**TypeScript**');
+      if (ts.isStrict != null) summary.push(`- strict: ${ts.isStrict}`);
+      if (ts.target) summary.push(`- target: ${ts.target}`);
+      if (ts.module) summary.push(`- module: ${ts.module}`);
+      if (ts.moduleResolution) summary.push(`- moduleResolution: ${ts.moduleResolution}`);
+      if (ts.jsx) summary.push(`- jsx: ${ts.jsx}`);
+      summary.push('');
     }
+
     if (conventions.eslint) {
-      summary.push('ESLint configured');
+      const eslint = conventions.eslint as Record<string, unknown>;
+      summary.push('**ESLint**');
+      const extendsArr = eslint.extends as string[] | undefined;
+      if (Array.isArray(extendsArr) && extendsArr.length > 0) {
+        summary.push(`- extends: ${extendsArr.join(', ')}`);
+      }
+      const rules = eslint.rules as Record<string, unknown> | undefined;
+      if (rules && typeof rules === 'object') {
+        const ruleEntries = Object.entries(rules).slice(0, 8);
+        for (const [name, value] of ruleEntries) {
+          const display = Array.isArray(value) ? String(value[0]) : String(value);
+          summary.push(`- ${name}: ${display}`);
+        }
+      }
+      if (eslint.hasTypeScriptSupport) summary.push('- TypeScript support: yes');
+      if (eslint.hasReactSupport) summary.push('- React support: yes');
+      summary.push('');
     }
+
     if (conventions.prettier) {
-      summary.push('Prettier configured');
+      const p = conventions.prettier as Record<string, unknown>;
+      summary.push('**Prettier**');
+      if (p.singleQuote != null) summary.push(`- singleQuote: ${p.singleQuote}`);
+      if (p.tabWidth != null) summary.push(`- tabWidth: ${p.tabWidth}`);
+      if (p.trailingComma != null) summary.push(`- trailingComma: ${p.trailingComma}`);
+      if (p.hasSemi != null) summary.push(`- semi: ${p.hasSemi}`);
+      if (p.printWidth != null) summary.push(`- printWidth: ${p.printWidth}`);
+      summary.push('');
     }
+
     if (conventions.testFramework) {
-      summary.push('Test framework configured');
+      const tf = conventions.testFramework as Record<string, unknown>;
+      summary.push('**Test Framework**');
+      if (tf.framework) summary.push(`- framework: ${tf.framework}`);
+      if (tf.hasCoverage != null) summary.push(`- coverage: ${tf.hasCoverage}`);
+      if (tf.e2eFramework) summary.push(`- e2e: ${tf.e2eFramework}`);
+      summary.push('');
     }
+
     if (conventions.editorConfig) {
-      summary.push('EditorConfig present');
+      const ec = conventions.editorConfig as Record<string, unknown>;
+      summary.push('**EditorConfig**');
+      const global = ec.globalRules as Record<string, unknown> | undefined;
+      if (global) {
+        if (global.indentStyle) summary.push(`- indent_style: ${global.indentStyle}`);
+        if (global.indentSize != null) summary.push(`- indent_size: ${global.indentSize}`);
+        if (global.endOfLine) summary.push(`- end_of_line: ${global.endOfLine}`);
+      }
+      summary.push('');
     }
+
     if (conventions.ci) {
-      summary.push('CI pipeline configured');
+      const ci = conventions.ci as Record<string, unknown>;
+      summary.push('**CI**');
+      if (ci.provider) summary.push(`- provider: ${ci.provider}`);
+      const workflows = ci.workflows as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(workflows) && workflows.length > 0) {
+        for (const wf of workflows.slice(0, 3)) {
+          const name = wf.name as string | undefined;
+          const nodeVer = wf.nodeVersion as string | undefined;
+          if (name) summary.push(`- workflow: ${name}${nodeVer ? ` (Node ${nodeVer})` : ''}`);
+        }
+      }
+      summary.push('');
+    }
+
+    // Remove trailing empty string
+    while (summary.length > 0 && summary[summary.length - 1] === '') {
+      summary.pop();
     }
 
     return summary;
