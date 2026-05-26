@@ -13,12 +13,12 @@ const baseContext: ReviewContext = {
     { hash: 'def5678', date: '2026-04-28', message: 'Add session refresh', author: 'bob' },
   ],
   conventions: {
-    typescript: { strict: true },
-    eslint: { extends: ['eslint:recommended'] },
-    prettier: { singleQuote: true },
-    testFramework: { name: 'vitest' },
-    editorConfig: { indent_size: 2 },
-    ci: { provider: 'github' },
+    typescript: { isStrict: false, target: 'ES2022', module: 'NodeNext' },
+    eslint: { extends: ['eslint:recommended'], rules: { 'no-unused-vars': 'off', '@typescript-eslint/no-explicit-any': 'warn' }, hasTypeScriptSupport: true },
+    prettier: { singleQuote: true, tabWidth: 2, trailingComma: 'es5', hasSemi: false },
+    testFramework: { framework: 'vitest', hasCoverage: true },
+    editorConfig: { globalRules: { indentStyle: 'space', indentSize: 2 } },
+    ci: { provider: 'github', workflows: [{ name: 'CI', nodeVersion: '20' }] },
   },
   architecture: {
     frameworks: ['express'],
@@ -176,13 +176,16 @@ describe('PromptBuilder — markdown format', () => {
     expect((result.content.match(/- hash/g) ?? []).length).toBe(10);
   });
 
-  it('includes team conventions', async () => {
+  it('includes team conventions with real values', async () => {
     const builder = new PromptBuilder({ format: 'markdown' });
     const result = await builder.buildPrompt(baseContext);
     expect(result.content).toContain('## Team Conventions');
-    expect(result.content).toContain('TypeScript strict mode');
-    expect(result.content).toContain('ESLint configured');
-    expect(result.content).toContain('Prettier configured');
+    expect(result.content).toContain('**TypeScript**');
+    expect(result.content).toContain('target: ES2022');
+    expect(result.content).toContain('**ESLint**');
+    expect(result.content).toContain('no-unused-vars: off');
+    expect(result.content).toContain('**Prettier**');
+    expect(result.content).toContain('singleQuote: true');
   });
 
   it('includes architecture notes with frameworks and patterns', async () => {
@@ -347,11 +350,12 @@ describe('PromptBuilder — prompt format', () => {
     expect((result.content.match(/- commit/g) ?? []).length).toBe(5);
   });
 
-  it('includes conventions when present', async () => {
+  it('includes conventions with real values', async () => {
     const builder = new PromptBuilder({ format: 'prompt' });
     const result = await builder.buildPrompt(baseContext);
     expect(result.content).toContain('## Team Conventions');
-    expect(result.content).toContain('TypeScript strict mode');
+    expect(result.content).toContain('**TypeScript**');
+    expect(result.content).toContain('target: ES2022');
   });
 
   it('includes ## Your Task with focus-specific instructions', async () => {
